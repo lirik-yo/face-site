@@ -1,0 +1,24 @@
+<script>
+</script>
+
+<script>
+	var data = {"Test":['a', 'b'], "ListRealization":['Вывод сначала']};
+	function createDiv(nameDiv){
+		var s = '';
+		s+='<div style="border: 1px solid black" id="'+nameDiv+'">\n';	
+		
+		s+='<ul>\n';
+		data[nameDiv].forEach((x)=>{s+='<li>'+x+'</li>\n';},s);
+		s+='<li><input type="text" class="inputNew" /> <button class="buttonNew" value="Add">+</button></li>\n';
+		s+='</ul>\n';
+		s+='</div>';
+		return s;
+	}
+</script>
+<body>
+</body>
+<script>
+	for (var nameDiv in data)
+		document.body.innerHTML+=createDiv(nameDiv);
+</script>
+
