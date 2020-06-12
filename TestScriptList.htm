@@ -1,24 +1,69 @@
 <script>
-</script>
+	function getData(){
+		dataJSON = localStorage.getItem('data');
+		if (typeof dataJSON !== 'undefined' && !!dataJSON){
+			data = JSON.parse(dataJSON)
+		}else{
+			data = {"Test":['a', 'b']};
+		}
+	}
+	function saveData(){
+		localStorage.setItem('data', JSON.stringify(data, null, '\t'));
+	}
 
-<script>
-	var data = {"Test":['a', 'b'], "ListRealization":['Вывод сначала']};
+	function addToData(nameDiv){
+		var inbox = document.getElementById(nameDiv).getElementsByClassName('inputNew')[0].value;
+		data[nameDiv].push(inbox);
+		saveData();
+		showAllData();
+	}
+
+	function removeBlock(nameDiv){
+		
+		if (!confirm('Realy will remove "'+nameDiv+'"?'))
+			return;
+		delete data[nameDiv];
+		saveData();
+		showAllData();
+	}
+	function removeElement(nameDiv, element){
+		if (!confirm('Realy will remove "'+element+'" from "'+nameDiv+'"?'))
+			return;
+		data[nameDiv] = data[nameDiv].filter(x=>x!=element);
+		saveData();
+		showAllData();
+	}
+
 	function createDiv(nameDiv){
 		var s = '';
 		s+='<div style="border: 1px solid black" id="'+nameDiv+'">\n';	
-		
+		s+='<h2>'+nameDiv+'<button onclick="removeBlock(\''+nameDiv+'\')">x</button></h2>';
 		s+='<ul>\n';
-		data[nameDiv].forEach((x)=>{s+='<li>'+x+'</li>\n';},s);
-		s+='<li><input type="text" class="inputNew" /> <button class="buttonNew" value="Add">+</button></li>\n';
+		data[nameDiv].forEach((x)=>{s+='<li>'+x+'<button onclick="removeElement(\''+nameDiv+'\', \''+x+'\')">x</button></li>\n';},s);
+		s+='<li><input type="text" class="inputNew" /> <button class="buttonNew" value="Add" onclick="addToData(\''+nameDiv+'\')">+</button></li>\n';
 		s+='</ul>\n';
 		s+='</div>';
 		return s;
+	}
+	function addBlock(){
+		var newNameDiv = document.getElementsByClassName('inputNewBlock')[0].value;
+		if (typeof data[newNameDiv] !== 'undefined')
+			return;
+		data[newNameDiv] = [];
+		saveData();
+		showAllData();
+	}
+	function showAllData(){
+		document.body.innerHTML = '';
+		for (var nameDiv in data)
+			document.body.innerHTML+=createDiv(nameDiv, data);
+		document.body.innerHTML+='<input type="text" class="inputNewBlock" /> <button class="buttonNewBlock" value="Add" onclick="addBlock()">+</button>'	
 	}
 </script>
 <body>
 </body>
 <script>
-	for (var nameDiv in data)
-		document.body.innerHTML+=createDiv(nameDiv);
+	var data = {};
+	getData();
+	showAllData();
 </script>
-
