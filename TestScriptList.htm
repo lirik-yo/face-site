@@ -1,3 +1,23 @@
+<head>
+<style>
+	body{
+		columns:12em;
+	}
+	div{
+		-webkit-columns-break-inside:avoid;
+		page-break-iside:avoid;
+		break-inside:avoid;
+	}
+	input{
+		width:12em;
+	}
+	ul input{
+		width:9em;
+	}
+	button{
+		padding: 0;
+	}
+</style>
 <script>
 	function getData(){
 		dataJSON = localStorage.getItem('data');
@@ -6,20 +26,36 @@
 		}else{
 			data = {"Test":['a', 'b']};
 		}
+		dataDefaultJSON = localStorage.getItem('dataDefault');
+		if (typeof dataDefaultJSON !== 'undefined' && !!dataDefaultJSON){
+			dataDefault = JSON.parse(dataDefaultJSON)
+		}else{
+			dataDefault = {};
+		}
+		configJSON = sessionStorage.getItem('config');
+		if (typeof configJSON !== 'undefined' && !!configJSON){
+			config = JSON.parse(configJSON)
+		}else{
+			config = {"HideDiv":[], "MaxShow":3};
+		}
 	}
 	function saveData(){
 		localStorage.setItem('data', JSON.stringify(data, null, '\t'));
+		localStorage.setItem('dataDefault', JSON.stringify(dataDefault, null, '\t'));
+		sessionStorage.setItem('config', JSON.stringify(config, null, '\t'));
 	}
 
 	function addToData(nameDiv){
 		var inbox = document.getElementById(nameDiv).getElementsByClassName('inputNew')[0].value;
-		data[nameDiv].push(inbox);
-		saveData();
+		if (!!inbox && !data[nameDiv].includes(inbox)){
+			data[nameDiv].push(inbox);
+			saveData();
+		}
 		showAllData();
+		setFocus(nameDiv);
 	}
 
-	function removeBlock(nameDiv){
-		
+	function removeBlock(nameDiv){		
 		if (!confirm('Realy will remove "'+nameDiv+'"?'))
 			return;
 		delete data[nameDiv];
@@ -33,37 +69,97 @@
 		saveData();
 		showAllData();
 	}
-
+	function hideDiv(nameDiv){
+		config.HideDiv.push(nameDiv);
+		saveData();
+		showAllData();
+	}
 	function createDiv(nameDiv){
-		var s = '';
-		s+='<div style="border: 1px solid black" id="'+nameDiv+'">\n';	
-		s+='<h2>'+nameDiv+'<button onclick="removeBlock(\''+nameDiv+'\')">x</button></h2>';
+		var s = ''; 
+		var r=Math.floor(Math.random()*236)+10;
+		var g=Math.floor(Math.random()*236)+10;
+		var b=Math.floor(Math.random()*236)+10;
+		var color = (r+g+b<256*3/2)?'white':'black';
+		s+='<div style="border: 1px solid black; background:rgb('+r+','+g+','+b+'); color:'+color+'" id="'+nameDiv+'">\n';	
+		s+='<h2>';
+		s+=nameDiv;
+		s+='<br>';
+		s+='<button onclick="hideDiv(\''+nameDiv.replaceAll("'","\\'")+'\')">&lt;0&gt;</button>'
+		s+='<button onclick="saveDefault(\''+nameDiv.replaceAll("'","\\'")+'\')">S</button>'
+		s+='<button onclick="loadDefault(\''+nameDiv.replaceAll("'","\\'")+'\')">L</button>'
+		if (data[nameDiv].length==0) s+='<button onclick="removeBlock(\''+nameDiv.replaceAll("'","\\'")+'\')">x</button>';
+		s+='</h2>';
 		s+='<ul>\n';
-		data[nameDiv].forEach((x)=>{s+='<li>'+x+'<button onclick="removeElement(\''+nameDiv+'\', \''+x+'\')">x</button></li>\n';},s);
-		s+='<li><input type="text" class="inputNew" /> <button class="buttonNew" value="Add" onclick="addToData(\''+nameDiv+'\')">+</button></li>\n';
+		s+='<li><input type="text" class="inputNew" onkeyPress="if (event.keyCode==13) addToData(\''+nameDiv.replaceAll("'","\\'")+'\');"/>';
+		s+='<button class="buttonNew" value="Add" onclick="addToData(\''+nameDiv.replaceAll("'","\\'")+'\')" >+</button></li>\n';
+		data[nameDiv].sort((x,y)=>{return Math.random()-0.5;}).slice(-config.MaxShow).forEach((x)=>{s+='<li>'+x+'<button onclick="removeElement(\''+nameDiv.replaceAll("'","\\'")+'\', \''+x.replaceAll("'","\\'")+'\')">x</button></li>\n';},s);
 		s+='</ul>\n';
+		s+='<textarea class="textareaBlock" onkeyPress="if (event.shiftKey && event.keyCode==13) addManyString(\''+nameDiv.replaceAll("'","\\'")+'\')"></textarea>';
+		s+='<br><button onclick="addManyString(\''+nameDiv.replaceAll("'","\\'")+'\')">+++</button>'
 		s+='</div>';
 		return s;
 	}
+	function setFocus(nameDiv){
+		var inbox = document.getElementById(nameDiv).getElementsByClassName('inputNew')[0];
+		inbox.focus();		
+	}
 	function addBlock(){
 		var newNameDiv = document.getElementsByClassName('inputNewBlock')[0].value;
-		if (typeof data[newNameDiv] !== 'undefined')
-			return;
-		data[newNameDiv] = [];
+		if (typeof data[newNameDiv] === 'undefined'){
+			data[newNameDiv] = [];
+			saveData();
+		}
+		showAllData();
+		setFocus(newNameDiv);		
+	}
+	function updateMaxShow(){
+		var newMaxShow = document.getElementById('newMaxShow').value;
+		config.MaxShow = newMaxShow;
 		saveData();
 		showAllData();
 	}
 	function showAllData(){
 		document.body.innerHTML = '';
-		for (var nameDiv in data)
-			document.body.innerHTML+=createDiv(nameDiv, data);
-		document.body.innerHTML+='<input type="text" class="inputNewBlock" /> <button class="buttonNewBlock" value="Add" onclick="addBlock()">+</button>'	
+		document.body.innerHTML += '<div>';
+		document.body.innerHTML += '<input id="newMaxShow" type="range" min="1" max="7" step="1" value="'+config.MaxShow+'" onChange="updateMaxShow()">';
+		document.body.innerHTML +='<input type="text" class="inputNewBlock"  onkeyPress="if (event.keyCode==13) addBlock();"/>';
+		document.body.innerHTML +='<button class="buttonNewBlock" value="Add" onclick="addBlock()">+</button>';
+		document.body.innerHTML += '</div>';
+		Object.keys(data).sort((x,y)=>{return Math.random()-0.5;}).forEach((nameDiv)=>{
+			if (!config.HideDiv.includes(nameDiv))
+				document.body.innerHTML+=createDiv(nameDiv, data);
+		});		
+		Array.from(document.body.getElementsByTagName('button')).forEach(x=>x.tabIndex = '-1');
+	}
+	function addManyString(nameDiv){		
+		var inbox = document.getElementById(nameDiv).getElementsByClassName('textareaBlock')[0].value;
+		inbox.split('\n').forEach(x=>{
+			if (!!x && !data[nameDiv].includes(x)) data[nameDiv].push(x);
+		});
+		saveData();
+		showAllData();
+	}
+	function saveDefault(nameDiv){
+		dataDefault[nameDiv] = data[nameDiv];
+		saveData();
+		showAllData();
+	}
+	function loadDefault(nameDiv){
+		if (typeof data[nameDiv] !== 'undefined')
+			dataDefault[nameDiv].forEach(x=>{
+				if (!!x && !data[nameDiv].includes(x)) data[nameDiv].push(x);
+			});
+		saveData();
+		showAllData();		
 	}
 </script>
+</head>
 <body>
 </body>
 <script>
 	var data = {};
+	var config = {};
+	var dataDefault = {};
 	getData();
 	showAllData();
 </script>
