@@ -52,7 +52,7 @@
 		showAllData();
 	}
 	function addToData(nameDiv){
-		var inbox = (document.getElementById(nameDiv).getElementsByClassName('inputNew')[0].value).trim;
+		var inbox = (document.getElementById(nameDiv).getElementsByClassName('inputNew')[0].value).trim();
 		if (!!inbox && !data[nameDiv].includes(inbox)){
 			data[nameDiv].push(inbox);
 			saveData();
@@ -115,7 +115,7 @@
 		inbox.focus();		
 	}
 	function addBlock(){
-		var newNameDiv = (document.getElementsByClassName('inputNewBlock')[0].value).trim;
+		var newNameDiv = (document.getElementsByClassName('inputNewBlock')[0].value).trim();
 		if (typeof data[newNameDiv] === 'undefined'){
 			data[newNameDiv] = [];
 			saveData();
