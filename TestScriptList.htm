@@ -180,7 +180,7 @@
 				var s = '';
 				for (j=0; j<4 && j< dataKeys.length; j++){	
 					var nameDiv = dataKeys[j];
-					s+=data[nameDiv].sort((x,y)=>{return Math.random()-0.5;})[0] + '; ';					
+					s+=data[nameDiv].sort((x,y)=>{return Math.random()-0.5;})[0] + '('+nameDiv+'); ';					
 				}
 				if (j>0) document.body.innerHTML += s+'<hr>';
 				document.body.innerHTML += '<br>';
