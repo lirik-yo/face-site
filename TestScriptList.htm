@@ -174,8 +174,7 @@
 			document.body.innerHTML += '<div style="border:1px solid black">';
 			for (var i=0; i<3; i++){
 				var dataKeys = (config.Randomize?Object.keys(data).sort((x,y)=>{return Math.random()-0.5;}):Object.keys(data));
-				dataKeys.filter(nameDiv=>!config.HideDiv.includes(nameDiv));
-				dataKeys.filter(nameDiv=>data[nameDiv].length>0);
+				dataKeys = dataKeys.filter(nameDiv=>!config.HideDiv.includes(nameDiv)).filter(nameDiv=>data[nameDiv].length>0);
 				var j =0;
 				var s = '';
 				for (j=0; j<4 && j< dataKeys.length; j++){	
