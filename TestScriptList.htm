@@ -92,6 +92,7 @@
 		showAllData();
 	}
 	function createDiv(nameDiv){
+		if ((data[nameDiv].length==0) && config.HideAddNew) return '';
 		var s = ''; 
 		var r=Math.floor(Math.random()*236)+10;
 		var g=Math.floor(Math.random()*236)+10;
@@ -172,7 +173,7 @@
 		s +='<button class="buttonDropSession" value="Drop" onclick="dropSession()">Drop session</button>';
 		s += 'Randomize:';
 		s += '<input type="checkbox" id="Randomize" onchange="switchRandomize()" '+(config.Randomize?'checked':'')+'/>';
-		s += 'Hide add new:';
+		s += 'Only show:';
 		s += '<input type="checkbox" id="HideAddNew" onchange="switchHideAddNew()" '+(config.HideAddNew?'checked':'')+'/>'
 		s += '</div>';
 		return s;
@@ -189,12 +190,12 @@
 	function showFooter(){	
 		if (!config.Randomize) return '';
 		var ss = '';
-		for (var i=0; i<3; i++){
+		for (var i=0; i<config.MaxShow; i++){
 			var dataKeys = (config.Randomize?Object.keys(data).sort((x,y)=>{return Math.random()-0.5;}):Object.keys(data));
 			dataKeys = dataKeys.filter(nameDiv=>!config.HideDiv.includes(nameDiv)).filter(nameDiv=>data[nameDiv].length>0);
 			var j =0;
 			var s = '';
-			for (j=0; j<4 && j< dataKeys.length; j++){	
+			for (j=0; j<config.MaxShow && j< dataKeys.length; j++){	
 				var nameDiv = dataKeys[j];
 				s+=data[nameDiv].sort((x,y)=>{return Math.random()-0.5;})[0] + '('+nameDiv+'); ';
 
