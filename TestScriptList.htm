@@ -207,8 +207,6 @@
 		Array.from(document.body.getElementsByTagName('button')).forEach(x=>x.tabIndex = '-1');
 		Array.from(document.styleSheets[0].rules).forEach(x=>{
 			if (x.selectorText == 'article') x.style.columnWidth = config.WidthEm+'em';
-//			if (x.selectorText == 'section input') x.style.width = config.WidthEm+'em';
-//			if (x.selectorText == 'ul input') x.style.width = (config.WidthEm-3)+'em';
 		});
 	}
 	function showAllData(){
