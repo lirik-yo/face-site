@@ -1,19 +1,30 @@
+<!DOCTYPE html>
 <head>
+<title>Randomization of Category</title>
 <style>
-	body{
+	article{
 		columns:12em;
 		word-wrap:anywhere;
 	}
-	div{
+	header, footer{
+		border:1px dashed black;
+		margin-bottom:15px;
+		margin-top:15px;
+		text-align:center;
+	}
+	section{
 		-webkit-columns-break-inside:avoid;
-		page-break-iside:avoid;
+		page-break-inside:avoid;
 		break-inside:avoid;
 	}
-	input{
-		width:12em;
+	input:[type='text']{
+		width:calc( 100% - 1em );
+	}
+	input:[type='range']{
+		width:calc( 50% - 10em );
 	}
 	ul input{
-		width:9em;
+		width:calc( 100% - 3em );
 	}
 	button{
 		padding: 0;
@@ -86,7 +97,7 @@
 		var g=Math.floor(Math.random()*236)+10;
 		var b=Math.floor(Math.random()*236)+10;
 		var color = (r+g+b<256*3/2)?'white':'black';
-		s+='<div style="border: 1px solid black; background:rgb('+r+','+g+','+b+'); color:'+color+'" id="'+nameDiv+'">\n';	
+		s+='<section style="border: 1px solid black; background:rgb('+r+','+g+','+b+'); color:'+color+'" id="'+nameDiv+'">\n';	
 		s+='<h2>';
 		s+=nameDiv;
 		s+='<br>';
@@ -107,7 +118,7 @@
 			s+='<textarea class="textareaBlock" onkeyPress="if (event.shiftKey && event.keyCode==13) addManyString(\''+nameDiv.replaceAll("'","\\'")+'\')"></textarea>';
 			s+='<br><button onclick="addManyString(\''+nameDiv.replaceAll("'","\\'")+'\')">+++</button>'
 		}
-		s+='</div>';
+		s+='</section>';
 		return s;
 	}
 	function setFocus(nameDiv){
@@ -147,47 +158,66 @@
 		saveData();
 		showAllData();
 	}
-	function showAllData(){
-		document.body.innerHTML = '';
-		document.body.innerHTML += '<div>';
-		document.body.innerHTML += 'Count show in random:<br>';
-		document.body.innerHTML += '<input id="newMaxShow" type="range" min="1" max="7" step="1" value="'+config.MaxShow+'" onChange="updateMaxShow()"><br>';
+	function showHeader(){
+		var s = '';
+		s += 'Count show in random:';
+		s += '<input id="newMaxShow" type="range" min="1" max="7" step="1" value="'+config.MaxShow+'" onChange="updateMaxShow()">';
+		s += 'Change column width:';
+		s += '<input id="newWidthEm" type="range" min="11" max="45" step="1" value="'+config.WidthEm+'" onChange="updateColumnWidth()"><br>';
 		if (!config.HideAddNew){
-			document.body.innerHTML += 'Add new block:<br>';
-			document.body.innerHTML +='<input type="text" class="inputNewBlock"  onkeyPress="if (event.keyCode==13) addBlock();"/>';
-			document.body.innerHTML +='<button class="buttonNewBlock" value="Add" onclick="addBlock()">+</button><br>';
+			s += 'Add new block:';
+			s +='<input type="text" class="inputNewBlock"  onkeyPress="if (event.keyCode==13) addBlock();"/>';
+			s +='<button class="buttonNewBlock" value="Add" onclick="addBlock()">+</button><br>';
 		}
-		document.body.innerHTML += 'Change column width:<br>';
-		document.body.innerHTML += '<input id="newWidthEm" type="range" min="11" max="45" step="1" value="'+config.WidthEm+'" onChange="updateColumnWidth()"><br>';
-		document.body.innerHTML +='<button class="buttonDropSession" value="Drop" onclick="dropSession()">Drop session</button><br>';
-		document.body.innerHTML += 'Randomize:';
-		document.body.innerHTML += '<input type="checkbox" id="Randomize" onchange="switchRandomize()" '+(config.Randomize?'checked':'')+'/>';
-		document.body.innerHTML += 'Hide add new:';
-		document.body.innerHTML += '<input type="checkbox" id="HideAddNew" onchange="switchHideAddNew()" '+(config.HideAddNew?'checked':'')+'/>'
-		document.body.innerHTML += '</div>';
+		s +='<button class="buttonDropSession" value="Drop" onclick="dropSession()">Drop session</button>';
+		s += 'Randomize:';
+		s += '<input type="checkbox" id="Randomize" onchange="switchRandomize()" '+(config.Randomize?'checked':'')+'/>';
+		s += 'Hide add new:';
+		s += '<input type="checkbox" id="HideAddNew" onchange="switchHideAddNew()" '+(config.HideAddNew?'checked':'')+'/>'
+		s += '</div>';
+		return s;
+	}
+	function showArticle(){
+		var s = '';
 		var dataKeys = (config.Randomize?Object.keys(data).sort((x,y)=>{return Math.random()-0.5;}):Object.keys(data));
 		dataKeys.forEach((nameDiv)=>{
 			if (!config.HideDiv.includes(nameDiv))
-				document.body.innerHTML+=createDiv(nameDiv, data);
-		});	
-		if (config.Randomize){
-			document.body.innerHTML += '<div style="border:1px solid black">';
-			for (var i=0; i<3; i++){
-				var dataKeys = (config.Randomize?Object.keys(data).sort((x,y)=>{return Math.random()-0.5;}):Object.keys(data));
-				dataKeys = dataKeys.filter(nameDiv=>!config.HideDiv.includes(nameDiv)).filter(nameDiv=>data[nameDiv].length>0);
-				var j =0;
-				var s = '';
-				for (j=0; j<4 && j< dataKeys.length; j++){	
-					var nameDiv = dataKeys[j];
-					s+=data[nameDiv].sort((x,y)=>{return Math.random()-0.5;})[0] + '('+nameDiv+'); ';					
-				}
-				if (j>0) document.body.innerHTML += s+'<hr>';
-				document.body.innerHTML += '<br>';
+				s+=createDiv(nameDiv, data);
+		});
+		return s;
+	}
+	function showFooter(){	
+		if (!config.Randomize) return '';
+		var ss = '';
+		for (var i=0; i<3; i++){
+			var dataKeys = (config.Randomize?Object.keys(data).sort((x,y)=>{return Math.random()-0.5;}):Object.keys(data));
+			dataKeys = dataKeys.filter(nameDiv=>!config.HideDiv.includes(nameDiv)).filter(nameDiv=>data[nameDiv].length>0);
+			var j =0;
+			var s = '';
+			for (j=0; j<4 && j< dataKeys.length; j++){	
+				var nameDiv = dataKeys[j];
+				s+=data[nameDiv].sort((x,y)=>{return Math.random()-0.5;})[0] + '('+nameDiv+'); ';
+
 			}
-			document.body.innerHTML += '</div>';
+			if (j>0) ss += s+'<hr>';
+			ss.innerHTML += '<br>';
 		}
+		return ss;		
+	}
+	function correctStyle(){
 		Array.from(document.body.getElementsByTagName('button')).forEach(x=>x.tabIndex = '-1');
-		Array.from(document.styleSheets[0].rules).filter(x=>x.selectorText=='body')[0].style.columnWidth=config.WidthEm+'em';
+		Array.from(document.styleSheets[0].rules).forEach(x=>{
+			if (x.selectorText == 'article') x.style.columnWidth = config.WidthEm+'em';
+		});
+	}
+	function showAllData(){
+		var header = document.body.getElementsByTagName('header')[0];
+		header.innerHTML = showHeader();
+		var article = document.body.getElementsByTagName('article')[0];
+		article.innerHTML = showArticle();
+		var footer = document.body.getElementsByTagName('footer')[0];
+		footer.innerHTML = showFooter();
+		correctStyle();
 	}
 	function addManyString(nameDiv){		
 		var inbox = document.getElementById(nameDiv).getElementsByClassName('textareaBlock')[0].value;
@@ -213,6 +243,12 @@
 </script>
 </head>
 <body>
+	<header>
+	</header>
+	<article>
+	</article>
+	<footer>
+	</footer>
 </body>
 <script>
 	var data = {};
