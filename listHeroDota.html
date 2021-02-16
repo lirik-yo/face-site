@@ -1,0 +1,326 @@
+<head>
+	<meta http-equiv="Content-type" content="text/html;charset=utf-8" />
+</head>
+<body>
+	<div id="input" style="font-size:0.6em; display:none"></div>
+	<div id="controlPanel">
+		<button onclick="localStorage.removeItem('listStr');document.location.reload();">Заново</button>
+		<button onclick="objectAllG=safeOneMoveQualification(objectAllG);">Ещё один вопрос</button>
+		<button onclick="moveQualificationCycle()">Спрашивать до конца</button>
+		<progress id="progress" value="0" max="1000" style="width:100%"><progress>
+	</div>
+	<h2>Список героев, сгруппированых по тому, сколько героев "лучше" чем они</h2>
+	<div id="output"></div>
+</body>
+<script>
+	//ToDo: Move in correct place on site
+	//ToDo: Make output with table on 5 column
+	//ToDo: Create input for any sentencyes
+	//ToDo: document.body.innerHTML="<table border=1>"+q.split("_").reduce((s,x,i)=>{if (i%10==0) s+="<tr>"; s+="<td>"+x+"</td>"; if (i%10==9) s+="</tr>"; return s},'')+"</table>";
+	//ToDo: var w = [1,2,4,7,11,18,29,47]; q.split("_").reduce((a,x,i)=>{if (a[a.length-1].length<w[a.length-1]){a[a.length-1].push(x);}else{a.push([x])} return a;},[[]]);
+	//ToDo:
+
+	var border=0.5;
+
+	function shuffle(a){
+		return a.sort((a,b)=>Math.random()-0.5);
+	}
+
+	function countRelateInLine(a){
+		return a.reduce((t,y)=>{return (y!=0)?t+1:t;},0);
+	}
+
+	function wait(ms){
+		var start = new Date().getTime();
+		var end = start;
+		while(end < start + ms) {
+			end = new Date().getTime();
+		}
+	}
+
+	function countPositive(objectAll, number){
+		return objectAll.relationshipTable[number].reduce((countPositive,cell)=>{return countPositive+(cell>0?1:0);},0);
+	}
+	function countNegative(objectAll, number){
+		return objectAll.relationshipTable[number].reduce((countPositive,cell)=>{return countPositive+(cell<0?1:0);},0);
+	}
+	function findRandomIndex(arr, value){
+		return shuffle(arr.map((x,i)=>{return {v:x,n:i};}).filter((x)=>x.v==value))[0].n;
+	}
+
+	function showProgress(objectAll){
+		var co = objectAll.relationshipTable.reduce((c,a)=>
+			c+a.reduce((countPositive,cell)=>countPositive+(cell==0?0:1),0)
+		,0);
+		var progress = document.getElementById('progress');
+		progress.max= objectAll.names.length*(objectAll.names.length-1);
+		progress.value= co;
+	}
+
+	function convertInputStringToArrays(inputStr){
+
+		function convertInputStringToNames(inputStr){
+			return shuffle(
+				inputStr
+				.split(';')
+				.filter((checkedName)=>checkedName!='')
+				.reduce((collectedListNames, currentRelate)=>
+					collectedListNames.concat(
+						currentRelate.split('_')
+					),
+					[]
+				)
+				.filter((checkdName, iName, overflowingListNames)=>
+					overflowingListNames.indexOf(checkdName) == iName
+				)
+			);
+		}
+
+		function convertInputStringToTableRelationship(inputStr, names){
+			return Array.from(Array(names.length)).map(
+				(row, iRow)=>
+				Array.from(Array(names.length)).map(
+					(column, iColumn)=>
+						(
+							(
+								inputStr.indexOf(
+									names[iRow]+
+									'_'+
+									names[iColumn]
+								)>-1
+							)
+							?1
+							:0
+							)
+				)
+			);
+		}
+
+		var namesInner = convertInputStringToNames(inputStr);
+		var relationshipTableInner = convertInputStringToTableRelationship(inputStr, namesInner);
+		return {
+			names:namesInner,
+			relationshipTable:relationshipTableInner
+		};
+	}
+
+	function updateTableRelative(objectAll){
+		function updateTranzitivTable(tableRelateInput){
+			var countRelate = tableRelateInput.reduce((s,x)=>{return s+countRelateInLine(x);},0);
+			do{
+				var countRelate = tableRelateInput.reduce((s,x)=>{return s+countRelateInLine(x);},0);
+				tableRelateInput.forEach((x,i)=>
+					x.forEach((y,j)=>
+						{if(tableRelateInput[i][j]!=0){
+							tableRelateInput[j][i]=-tableRelateInput[i][j];
+							tableRelateInput[j].forEach((z,k)=>
+								{if (tableRelateInput[i][j]==tableRelateInput[j][k])
+									{tableRelateInput[i][k]=tableRelateInput[i][j];}})}}));
+			}while(countRelate != tableRelateInput.reduce((s,x)=>{return s+countRelateInLine(x);},0));
+			return tableRelateInput;
+		}
+		function cutLowObject(tableRelateInput, objectAll){
+			var maxNegative = tableRelateInput.length*border;
+			tableRelateInput.forEach(
+				(x,i)=>{
+					if (countNegative(objectAll, i)>maxNegative){
+						x.forEach((y,j)=>{
+							if(tableRelateInput[i][j]==0 && i!=j){
+								tableRelateInput[i][j]=-1;
+								tableRelateInput[j][i]=1;
+							}
+						});
+					};
+				}
+			);
+			return tableRelateInput;
+		}
+		return {
+			names: objectAll.names,
+			relationshipTable: updateTranzitivTable(cutLowObject(updateTranzitivTable(objectAll.relationshipTable), objectAll))
+		};
+	}
+
+
+
+
+	function haveIntersection(listExist, checkedColumn, tableRelationship){
+		return listExist.some((checkRow)=>tableRelationship[checkRow][checkedColumn]!=0);
+	}
+
+	function createExtensionListByNumber(interestList, checkedColumn, tableRelationship){
+		return interestList
+			.filter(
+				(checkedList)=>
+				!haveIntersection(checkedList, checkedColumn, tableRelationship)
+			)
+			.map(
+				(updatedList)=>{
+					var temporaryArray = updatedList.slice();
+					temporaryArray.push(checkedColumn);
+					return temporaryArray;
+				}
+			);
+	}
+
+	function findRandomSetWithMaxLength(listInterestSet){
+		return shuffle(listInterestSet)
+			.reduce(
+					(previousList, checkedList)=>{
+						return (checkedList.length>previousList.length)
+						?checkedList
+						:previousList;
+					},
+					[]
+				);
+	}
+
+	function findSetWithMinimumRelate(tableRelateIn){
+		function findIndexLineWithMinimumRelate(tableRelateIn){
+			var countExist = tableRelateIn.map(row=>countRelateInLine(row));
+			var minCountRow = countExist.reduce((min,countRow)=>{return Math.min(min,countRow);});
+			if (minCountRow == tableRelateIn.length-1) return null;
+			return findRandomIndex(countExist, minCountRow);
+		}
+		var numberSearchLine = findIndexLineWithMinimumRelate(tableRelateIn);
+		if (numberSearchLine === null) return null;
+		return findRandomSetWithMaxLength
+			(
+				shuffle(
+					tableRelateIn
+					.reduce(
+						(listPotentional,elem,number)=>{
+								return (number!=numberSearchLine && elem[numberSearchLine]==0)
+									?listPotentional.concat(number)
+									:listPotentional;
+							},
+						[]
+					)
+				).reduce(
+						(interestList, interestNumber)=>{
+							if (interestList.some(checkedList=>checkedList.length>=4)) return interestList;
+							interestList = interestList.concat(createExtensionListByNumber(interestList, interestNumber, tableRelateIn));
+							interestList.push([interestNumber]);
+							return interestList;
+						},
+						[]
+					)
+			)
+			.concat(numberSearchLine)
+			;
+	}
+
+	function moveQualification(objectAll, questionSet){
+		function askFormQuestion(questionSet, names){
+			var answerNumber = prompt(
+				questionSet.reduce(
+						(allText, numberColumn, numberAnswer)=>
+						{return allText+'\n'+(numberAnswer+1)+'. '+names[numberColumn];},
+						'Выбери самый сильный номер и через тире самый слабый:'
+					),
+				'');
+			if (answerNumber==null || answerNumber=='') return null;
+			if (answerNumber.indexOf('-')==-1) return {max:questionSet[answerNumber-1], min: -1};
+			return {max: questionSet[answerNumber.split('-')[0]-1], min: questionSet[answerNumber.split('-')[1]-1]};
+		}
+		var resultAsk = askFormQuestion(questionSet, objectAll.names);
+		if (resultAsk == null) return null;
+		if (resultAsk.max>-1)
+			questionSet.filter((numberColumn)=>numberColumn!=resultAsk.max).forEach((numberColumn)=>{
+				objectAll.relationshipTable[resultAsk.max][numberColumn]=1;
+			});
+		if (resultAsk.min>-1)
+			questionSet.filter((numberColumn)=>numberColumn!=resultAsk.min).forEach((numberColumn)=>{
+				objectAll.relationshipTable[resultAsk.min][numberColumn]=-1;
+			});
+		return updateTableRelative(objectAll);
+	}
+	function outputStr(objectAll){
+		return objectAll.relationshipTable.map(
+			(x,i)=>x.map(
+				(v,j)=>{if (v<=0) return ''; if (v>0) return objectAll.names[i]+'_'+objectAll.names[j];}
+			).filter(
+				(text)=>text!=''
+			)
+		).map(
+			(x,i)=>{
+				if (x.length==0)
+					return objectAll.names[i];
+				return x.join(';');
+			}
+		).join(';');
+	}
+	function updateShowInfo(objectAll){
+		console.log(objectAll);
+		localStorage.setItem('listStr', outputStr(objectAll));
+		HTMLStr(objectAll);
+	}
+	function oneMoveQualification(objectAll){
+		var questionSet = findSetWithMinimumRelate(objectAll.relationshipTable);
+		var newObjectAll = null;
+		if (questionSet != null){
+			newObjectAll = moveQualification(objectAll, questionSet);
+		}
+		if (newObjectAll!=null){
+			updateShowInfo(newObjectAll);
+		}
+		return newObjectAll;
+	}
+	function safeOneMoveQualification(objectAll){
+		newObjectAll=oneMoveQualification(objectAll);
+		return newObjectAll??objectAll;
+	}
+	function moveQualificationCycle(){
+		objectAll=objectAllG;
+		var newObjectAll = oneMoveQualification(objectAll);
+		if (newObjectAll == null) return;
+		objectAllG = newObjectAll;
+		setTimeout(moveQualificationCycle, 1);
+	}
+	function HTMLStr(objectAll){
+		var showedArr = objectAll.names.map(
+				(nameColumn, numberColumn)=>
+				{return {name: nameColumn, countColumn: countPositive(objectAll, numberColumn), countMinus: countNegative(objectAll, numberColumn)};}
+			).sort(
+				(a,b)=>
+				b.countColumn-a.countColumn
+			);
+		var maxNegative = objectAll.names.length*border;
+		var res = '<ol>';
+		for (var i =0; i<maxNegative; i++){
+			var thatArr = showedArr.filter(x=>x.countMinus==i).map(ob=>ob.name);
+			if (thatArr.length==0) continue;
+			res += '<li value='+i+'>';
+			if (thatArr.length==1){
+				res += thatArr[0];
+			}else{
+				res += '<ul><li>'+thatArr.join('</li><li>')+'</li></ul>';
+			}
+			res += '</li>';
+		}
+		res += '</ol>';
+		//res += '<ul><li>'+showedArr.filter(x=>x.countMinus>=maxNegative).map(ob=>ob.name).join('</li><li>')+'</li></ul>';
+		res += showedArr.filter(x=>x.countMinus>=maxNegative).map(ob=>ob.name).join('; ');
+		document.getElementById('output').innerHTML = res;
+		showProgress(objectAll);
+	}
+	function readInputStr(){
+		var listStr = localStorage.getItem('listStr');
+		if (listStr == null)
+			//listStr = ";;;;;;;;;;;;Abaddon;Alchemist;Axe;Beastmaster;Brewmaster;Bristleback;Centaur Warrunner;Chaos Knight;Clockwerk;Doom;Dragon Knight;Earth Spirit;Earthshaker;Elder Titan;Huskar;Io;Kunkka;Legion Commander;Lifestealer;Lycan;Magnus;Mars;Night Stalker;Omniknight;Phoenix;Pudge;Sand King;Slardar;Spirit Breaker;Sven;Tidehunter;Timbersaw;Tiny;Treant Protector;Tusk;Underlord;Undying;Wraith King;Anti-Mage;Arc Warden;Bloodseeker;Bounty Hunter;Broodmother;Clinkz;Drow Ranger;Ember Spirit;Faceless Void;Gyrocopter;Juggernaut;Lone Druid;Luna;Medusa;Meepo;Mirana;Monkey King;Morphling;Naga Siren;Nyx Assassin;Pangolier;Phantom Assassin;Phantom Lancer;Razor;Riki;Shadow Fiend;Slark;Sniper;Spectre;Templar Assassin;Terrorblade;Troll Warlord;Ursa;Vengeful Spirit;Venomancer;Viper;Weaver;Ancient Apparition;Bane;Batrider;Crystal Maiden;Dark Seer;Dark Willow;Dazzle;Death Prophet;Disruptor;Enchantress;Enigma;Grimstroke;Jakiro;Keeper of the Light;Leshrac;Lich;Lina;Lion;Nature's Prophet;Necrophos;Ogre Magi;Oracle;Outworld Devourer;Puck;Pugna;Queen of Pain;Shadow Demon;Shadow Shaman;Silencer;Skywrath Mage;Storm Spirit;Techies;Tinker;Warlock;Windranger;Winter Wyvern;Witch Doctor;Zeus;Chen;Invoker;Rubick;Visage";
+      listStr = ";;;;Чистота без грязи и сора;Чтобы вокруг было чисто без сора;Убранность и категорность - всё по своим местам;Интересующиеся дети, спрашивающие дети; Красивые дети;Самостоятельные дети;Рукастость детей;Безопасность и нетеряемость;Моё мастерство и рукастость;Делать поделки;Идеальный дом, гдё всё целое и на месте;Лена доведена до оргазма;Практика БДСМ ных штук;Соблюдение правил;Подбор чисел и табличек в играх;Понежиться в кровати;Чтобы подушка была удобная;Вкусная еда, жирная и сочная;Сам процесс готовки;Медитативные повторяющиеся игрушки;Здоровое тело;Не пихать в меня шарлатанство;Красивая одежда и носить юбло;Чтобы собеседники друг друга уважали;Писать захватывающие тексты с сюжетом;Называть секс сексом;Рисовать скетчи и комиксы;Читать комиксы;Чтобы код компилился и хопа автоматизация;Мои личные вещи;Перебор талисманчиков;Перекладывать карты и составлять колоды;Играть в карты нравится;Разговаривать с людьми и узнавать, что им интересно;Ходить без одышки;Ошарашивать тем, что вот он я - антипод;Переработка мусора;Пацифизм;Организовывать какую-то вечеринку или весёлую деятельность;Оставлять всякие отзывы, чтобы люди знали;Что-то новое в самом коде;Смотреть бешеный боевик;Читать драматические стихи;Играть и выступать с инструментами;Режисировать всякое боевичное;Чтобы Лена в эмоциональной безопасности;Чтение книг по математике;Решение задачек;Разбор сложных формул и их доказательство;Чтобы на компе всё хорошо и понятно запускалось;Чтобы рабочая зона была чистенькая и удобная;Коллекционка меня прикалывает;Красивая фентезятина;Красивое свое тело;Выполнение спортивных нормативов;Бегать в догонялки с детьми;Рассказывать собравшимся детям;Секс;Радуют целые объекты в доме;Есть люблю вкуснятину;Пробовать экзотические блюда;Гардероб личный с вешами на выбор;Шить походу;Косплей;Повторять тропы и делать отсылки;В карты играть хочу;Иметь достаточно денег;Всякий компилящийся код;Новые эзотерические языки программирования;Самостоятельные дети;Лезущиеся и интересующиеся деи;Родственики легко выздоравливали;Лечение нормальными лекарствами, а не хернёй;Политику воспринимали разнобоко;Государство исполняет свои законы;Быть в тепле и уюте;;;;;;;;";
+
+		document.getElementById('input').innerHTML = listStr;
+		return listStr;
+	}
+
+	var objectAllG = updateTableRelative(convertInputStringToArrays(readInputStr()));
+	updateShowInfo(objectAllG);
+	setTimeout(moveQualificationCycle, 200);
+
+	//My 28/05/2019: Pudge_Meepo_Abaddon_Earthshaker_Ursa_Tidehunter_Storm Spirit_Troll Warlord_Lion_Grimstroke_Tiny_Omniknight_Dark Willow_Sniper_Crystal Maiden_Silencer_Anti-Mage_Legion Commander_Skywrath Mage_Riki_Axe_Brewmaster_Medusa_Faceless Void_Undying_Ember Spirit_Witch Doctor_Terrorblade_Wraith King_Underlord_Necrophos_Clinkz_Morphling_Juggernaut_Treant Protector_Drow Ranger_Winter Wyvern_Elder Titan_Io_Outworld Devourer_Kunkka_Huskar_Disruptor_Pangolier_Pugna_Sand King_Oracle_Chaos Knight_Ogre Magi_Bloodseeker_Phantom Lancer_Razor_Nature's Prophet_Dragon Knight_Enchantress_Zeus_Alchemist_Dazzle_Luna_Weaver_Lina_Spirit Breaker_Bane_Dark Seer_Batrider_Earth Spirit_Phoenix_Lone Druid_Sven_Monkey King_Lich_Leshrac_Centaur Warrunner_Templar Assassin_Venomancer_Doom_Bristleback_Shadow Shaman_Windranger_Enigma_Mars_Techies_Tusk_Viper_Warlock_Bounty Hunter_Broodmother_Vengeful Spirit_Lycan_Keeper of the Light_Nyx Assassin_Phantom Assassin_Arc Warden_Ancient Apparition_Puck_Queen of Pain_Magnus_Shadow Demon_Death Prophet_Lifestealer_Beastmaster_Jakiro_Gyrocopter_Mirana_Clockwerk_Spectre_Naga Siren_Night Stalker_Tinker_Slardar_Timbersaw_Shadow Fiend
+	//var q = "Pudge_Meepo_Abaddon_Earthshaker_Ursa_Tidehunter_Storm Spirit_Troll Warlord_Lion_Grimstroke_Tiny_Omniknight_Dark Willow_Sniper_Crystal Maiden_Silencer_Anti-Mage_Legion Commander_Skywrath Mage_Riki_Axe_Brewmaster_Medusa_Faceless Void_Undying_Ember Spirit_Witch Doctor_Terrorblade_Wraith King_Underlord_Necrophos_Clinkz_Morphling_Juggernaut_Treant Protector_Drow Ranger_Winter Wyvern_Elder Titan_Io_Outworld Devourer_Kunkka_Huskar_Disruptor_Pangolier_Pugna_Sand King_Oracle_Chaos Knight_Ogre Magi_Bloodseeker_Phantom Lancer_Razor_Nature's Prophet_Dragon Knight_Enchantress_Zeus_Alchemist_Dazzle_Luna_Weaver_Lina_Spirit Breaker_Bane_Dark Seer_Batrider_Earth Spirit_Phoenix_Lone Druid_Sven_Monkey King_Lich_Leshrac_Centaur Warrunner_Templar Assassin_Venomancer_Doom_Bristleback_Shadow Shaman_Windranger_Enigma_Mars_Techies_Tusk_Viper_Warlock_Bounty Hunter_Broodmother_Vengeful Spirit_Lycan_Keeper of the Light_Nyx Assassin_Phantom Assassin_Arc Warden_Ancient Apparition_Puck_Queen of Pain_Magnus_Shadow Demon_Death Prophet_Lifestealer_Beastmaster_Jakiro_Gyrocopter_Mirana_Clockwerk_Spectre_Naga Siren_Night Stalker_Tinker_Slardar_Timbersaw_Shadow Fiend"
+	//var w = [1,2,4,7,11,18,29,47]; var e = q.split("_").reduce((a,x,i)=>{if (a[a.length-1].length<w[a.length-1]){a[a.length-1].push(x);}else{a.push([x])} return a;},[[]]);
+	//var r = e.map((x,i)=>x.map((y)=>Array.from(Array(e.length-i+1)).map(z=>y)))
+	//var t = r.map((x)=>x.reduce((a,y)=>a.concat(y), [])).reduce((a,x)=>a.concat(x),[]).sort(()=>Math.random()-0.5);
+</script>
