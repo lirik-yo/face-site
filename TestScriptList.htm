@@ -135,6 +135,13 @@
 		showAllData();
 		setFocus(newNameDiv);		
 	}
+	function importData(){
+		console.log('data=JSON.parse();saveData();showAllData()');
+		//var newData = prompt('Print correct data this', "");
+	}
+	function exportData(){
+		console.log(JSON.stringify(data));
+	}
 	function updateMaxShow(){
 		var newMaxShow = document.getElementById('newMaxShow').value;
 		config.MaxShow = newMaxShow;
@@ -169,6 +176,8 @@
 			s += 'Add new block:';
 			s +='<input type="text" class="inputNewBlock"  onkeyPress="if (event.keyCode==13) addBlock();"/>';
 			s +='<button class="buttonNewBlock" value="Add" onclick="addBlock()">+</button><br>';
+			s +='<button class="buttonLoadData" value="Import" onclick="importData()">import</button>';
+			s +='<button class="buttonLoadData" value="Export" onclick="exportData()">export</button><br>';
 		}
 		s +='<button class="buttonDropSession" value="Drop" onclick="dropSession()">Drop session</button>';
 		s += 'Randomize:';
