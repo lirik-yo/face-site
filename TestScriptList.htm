@@ -136,8 +136,11 @@
 		setFocus(newNameDiv);		
 	}
 	function importData(){
-		console.log('data=JSON.parse();saveData();showAllData()');
-		//var newData = prompt('Print correct data this', "");
+		var newData = prompt('Print correct data this', "{\"1\":[]}");
+		if (newData == null) return;
+		data=JSON.parse(newData);
+		saveData();
+		showAllData();
 	}
 	function exportData(){
 		console.log(JSON.stringify(data));
