@@ -5,6 +5,12 @@
 	<div id="input" style="font-size:0.6em; display:none"></div>
 	<div id="controlPanel">
 		<button onclick="localStorage.removeItem('listStr');document.location.reload();">Заново</button>
+		<button onclick="var q = window.prompt('Введите строку импорта', ''); if (q==null || q==''){}else{localStorage.setItem('listStr', q);document.location.reload();}">Импорт строки</button>
+		<button onclick="window.prompt('Скопируй', localStorage.getItem('listStr'));">Экспорт строки</button>
+		<button onclick="saveAsFile()">Сохранить файлом</button>
+		<button onclick="openFile()">Открыть файл</button>
+		<input id="inp" type='file' style="visibility:hidden; display:none" onchange="readFile(event)" />
+		<button onclick="addItem();">Новый объект</button>
 		<button onclick="objectAllG=safeOneMoveQualification(objectAllG);">Ещё один вопрос</button>
 		<button onclick="moveQualificationCycle()">Спрашивать до конца</button>
 		<progress id="progress" value="0" max="1000" style="width:100%"><progress>
@@ -307,11 +313,40 @@
 	function readInputStr(){
 		var listStr = localStorage.getItem('listStr');
 		if (listStr == null)
+      		listStr = ";;;;;;;;;;;;;;;;;;;;;;";
 			listStr = ";;;;;;;;;;;;Abaddon;Alchemist;Axe;Beastmaster;Brewmaster;Bristleback;Centaur Warrunner;Chaos Knight;Clockwerk;Doom;Dragon Knight;Earth Spirit;Earthshaker;Elder Titan;Huskar;Io;Kunkka;Legion Commander;Lifestealer;Lycan;Magnus;Mars;Night Stalker;Omniknight;Phoenix;Pudge;Sand King;Slardar;Spirit Breaker;Sven;Tidehunter;Timbersaw;Tiny;Treant Protector;Tusk;Underlord;Undying;Wraith King;Anti-Mage;Arc Warden;Bloodseeker;Bounty Hunter;Broodmother;Clinkz;Drow Ranger;Ember Spirit;Faceless Void;Gyrocopter;Juggernaut;Lone Druid;Luna;Medusa;Meepo;Mirana;Monkey King;Morphling;Naga Siren;Nyx Assassin;Pangolier;Phantom Assassin;Phantom Lancer;Razor;Riki;Shadow Fiend;Slark;Sniper;Spectre;Templar Assassin;Terrorblade;Troll Warlord;Ursa;Vengeful Spirit;Venomancer;Viper;Weaver;Ancient Apparition;Bane;Batrider;Crystal Maiden;Dark Seer;Dark Willow;Dazzle;Death Prophet;Disruptor;Enchantress;Enigma;Grimstroke;Jakiro;Keeper of the Light;Leshrac;Lich;Lina;Lion;Nature's Prophet;Necrophos;Ogre Magi;Oracle;Outworld Devourer;Puck;Pugna;Queen of Pain;Shadow Demon;Shadow Shaman;Silencer;Skywrath Mage;Storm Spirit;Techies;Tinker;Warlock;Windranger;Winter Wyvern;Witch Doctor;Zeus;Chen;Invoker;Rubick;Visage";
-      			//listStr = ";;;;;;;;;;;;;;;;;Чистое, целое и по местам;;Переработка мусора;;Гурманство;;Эзотерическое программирование;;Активные дети;;Моё мастерство;;Творческое создание;;Юбло;;Коллекционка;;Здоровое тело;;Социальность;;Решение задачек;;Медицина;;Лена в эмоциональной безопасности;;Пацифизм;;;;;;;;;;;";
 
 		document.getElementById('input').innerHTML = listStr;
 		return listStr;
+	}
+	function addItem(){
+		var Str = localStorage.getItem('listStr');
+		answer = window.prompt("Добавить объект", "Важное дело");
+		if (answer == null || answer == "")
+		{}else{
+			localStorage.setItem('listStr', Str + ';' + answer);		
+			document.location.reload();
+		}
+	}
+
+	function saveAsFile(){
+		var Str = localStorage.getItem('listStr');
+		uriContent = "data:application/octet-stream,"+encodeURIComponent(Str);
+		newWindow = window.open(uriContent, 'importedFile.txt');
+	}
+
+	function openFile() {
+	  document.getElementById('inp').click();
+	}
+	function readFile(e) {
+	  var file = e.target.files[0];
+	  if (!file) return;
+	  var reader = new FileReader();
+	  reader.onload = function(e) {
+		localStorage.setItem('listStr', e.target.result);
+		document.location.reload();
+	  }
+	  reader.readAsText(file)
 	}
 
 	var objectAllG = updateTableRelative(convertInputStringToArrays(readInputStr()));
