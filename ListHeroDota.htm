@@ -13,10 +13,21 @@
 		<button onclick="addItem();">Новый объект</button>
 		<button onclick="objectAllG=safeOneMoveQualification(objectAllG);">Ещё один вопрос</button>
 		<button onclick="moveQualificationCycle()">Спрашивать до конца</button>
-		<progress id="progress" value="0" max="1000" style="width:100%"><progress>
 	</div>
-	<h2>Список героев, сгруппированых по тому, сколько героев "лучше" чем они</h2>
-	<div id="output"></div>
+	<table border="1">
+		<tr>
+			<th><span id="caption1"></span> <progress id="progress1" value="0" max="1000" style="width:100%"><progress></th>
+			<th><span id="caption2"></span> <progress id="progress2" value="0" max="1000" style="width:100%"><progress></th>
+			<th><span id="caption3"></span> <progress id="progress3" value="0" max="1000" style="width:100%"><progress></th>
+			<th><span id="caption4"></span> <progress id="progress4" value="0" max="1000" style="width:100%"><progress></th>
+		</tr>
+		<tr>
+			<td id="output1"></td>
+			<td id="output2"></td>
+			<td id="output3"></td>
+			<td id="output4"></td>
+		</tr>
+	</table>
 </body>
 <script>
 	//ToDo: Move in correct place on site
@@ -58,7 +69,7 @@
 		var co = objectAll.relationshipTable.reduce((c,a)=>
 			c+a.reduce((countPositive,cell)=>countPositive+(cell==0?0:1),0)
 		,0);
-		var progress = document.getElementById('progress');
+		var progress = document.getElementById('progress1');
 		progress.max= objectAll.names.length*(objectAll.names.length-1);
 		progress.value= co;
 	}
@@ -68,14 +79,14 @@
 		function convertInputStringToNames(inputStr){
 			return shuffle(
 				inputStr
-				.split(';')
+				.split(/;|_|$|\|/)
 				.filter((checkedName)=>checkedName!='')
-				.reduce((collectedListNames, currentRelate)=>
-					collectedListNames.concat(
-						currentRelate.split('_')
-					),
-					[]
-				)
+			//	.reduce((collectedListNames, currentRelate)=>
+					//collectedListNames.concat(
+//						currentRelate.split('_')
+	//				),
+		//			[]
+			//	)
 				.filter((checkdName, iName, overflowingListNames)=>
 					overflowingListNames.indexOf(checkdName) == iName
 				)
@@ -307,14 +318,14 @@
 		res += '</ol>';
 		//res += '<ul><li>'+showedArr.filter(x=>x.countMinus>=maxNegative).map(ob=>ob.name).join('</li><li>')+'</li></ul>';
 		res += showedArr.filter(x=>x.countMinus>=maxNegative).map(ob=>ob.name).join('; ');
-		document.getElementById('output').innerHTML = res;
+		document.getElementById('output1').innerHTML = res;
 		showProgress(objectAll);
 	}
 	function readInputStr(){
 		var listStr = localStorage.getItem('listStr');
 		if (listStr == null)
       		listStr = ";;;;;;;;;;;;;;;;;;;;;;";
-			listStr = ";;;;;;;;;;;;Abaddon;Alchemist;Axe;Beastmaster;Brewmaster;Bristleback;Centaur Warrunner;Chaos Knight;Clockwerk;Doom;Dragon Knight;Earth Spirit;Earthshaker;Elder Titan;Huskar;Io;Kunkka;Legion Commander;Lifestealer;Lycan;Magnus;Mars;Night Stalker;Omniknight;Phoenix;Pudge;Sand King;Slardar;Spirit Breaker;Sven;Tidehunter;Timbersaw;Tiny;Treant Protector;Tusk;Underlord;Undying;Wraith King;Anti-Mage;Arc Warden;Bloodseeker;Bounty Hunter;Broodmother;Clinkz;Drow Ranger;Ember Spirit;Faceless Void;Gyrocopter;Juggernaut;Lone Druid;Luna;Medusa;Meepo;Mirana;Monkey King;Morphling;Naga Siren;Nyx Assassin;Pangolier;Phantom Assassin;Phantom Lancer;Razor;Riki;Shadow Fiend;Slark;Sniper;Spectre;Templar Assassin;Terrorblade;Troll Warlord;Ursa;Vengeful Spirit;Venomancer;Viper;Weaver;Ancient Apparition;Bane;Batrider;Crystal Maiden;Dark Seer;Dark Willow;Dazzle;Death Prophet;Disruptor;Enchantress;Enigma;Grimstroke;Jakiro;Keeper of the Light;Leshrac;Lich;Lina;Lion;Nature's Prophet;Necrophos;Ogre Magi;Oracle;Outworld Devourer;Puck;Pugna;Queen of Pain;Shadow Demon;Shadow Shaman;Silencer;Skywrath Mage;Storm Spirit;Techies;Tinker;Warlock;Windranger;Winter Wyvern;Witch Doctor;Zeus;Chen;Invoker;Rubick;Visage";
+			listStr = "Важно|;;;;;;;;;;;;Abaddon;Alchemist;Axe;Beastmaster;Brewmaster;Bristleback;Centaur Warrunner;Chaos Knight;Clockwerk;Doom;Dragon Knight;Earth Spirit;Earthshaker;Elder Titan;Huskar;Io;Kunkka;Legion Commander;Lifestealer;Lycan;Magnus;Mars;Night Stalker;Omniknight;Phoenix;Pudge;Sand King;Slardar;Spirit Breaker;Sven;Tidehunter;Timbersaw;Tiny;Treant Protector;Tusk;Underlord;Undying;Wraith King;Anti-Mage;Arc Warden;Bloodseeker;Bounty Hunter;Broodmother;Clinkz;Drow Ranger;Ember Spirit;Faceless Void;Gyrocopter;Juggernaut;Lone Druid;Luna;Medusa;Meepo;Mirana;Monkey King;Morphling;Naga Siren;Nyx Assassin;Pangolier;Phantom Assassin;Phantom Lancer;Razor;Riki;Shadow Fiend;Slark;Sniper;Spectre;Templar Assassin;Terrorblade;Troll Warlord;Ursa;Vengeful Spirit;Venomancer;Viper;Weaver;Ancient Apparition;Bane;Batrider;Crystal Maiden;Dark Seer;Dark Willow;Dazzle;Death Prophet;Disruptor;Enchantress;Enigma;Grimstroke;Jakiro;Keeper of the Light;Leshrac;Lich;Lina;Lion;Nature's Prophet;Necrophos;Ogre Magi;Oracle;Outworld Devourer;Puck;Pugna;Queen of Pain;Shadow Demon;Shadow Shaman;Silencer;Skywrath Mage;Storm Spirit;Techies;Tinker;Warlock;Windranger;Winter Wyvern;Witch Doctor;Zeus;Chen;Invoker;Rubick;Visage$";
 
 		document.getElementById('input').innerHTML = listStr;
 		return listStr;
