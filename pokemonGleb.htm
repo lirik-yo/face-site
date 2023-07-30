@@ -1,0 +1,400 @@
+<head>
+	<meta http-equiv="Content-type" content="text/html;charset=utf-8" />
+</head>
+<body>
+	<h1>Изкарманнное существо</h1>
+	<h2>Имя: </h2>
+	<div style="columns:2">
+	
+	
+	
+	<script>
+	Elements = {
+		'Normal':{Chars:{'Тело':1 , 'Бой':0, 'Выносливость':2, 'Ловкость':1, 'Восприятие':1, 'Точность':1, 'Аналитика':2, 'Общение':1, 'Хитрость':2, 'Воля':1, 'Чутьё':1}},
+		'Fire':{Chars:{'Тело':1 , 'Бой':1, 'Выносливость':0, 'Ловкость':1, 'Восприятие':2, 'Точность':0, 'Аналитика':0, 'Общение':2, 'Хитрость':1, 'Воля':2, 'Чутьё':1}},
+		'Water':{Chars:{'Тело':1 , 'Бой':0, 'Выносливость':2, 'Ловкость':2, 'Восприятие':0, 'Точность':1, 'Аналитика':1, 'Общение':2, 'Хитрость':2, 'Воля':1, 'Чутьё':1}},
+		'Grass':{Chars:{'Тело':1 , 'Бой':0, 'Выносливость':2, 'Ловкость':2, 'Восприятие':1, 'Точность':1, 'Аналитика':1, 'Общение':2, 'Хитрость':1, 'Воля':0, 'Чутьё':1}},
+		'Electric':{Chars:{'Тело':0 , 'Бой':1, 'Выносливость':0, 'Ловкость':0, 'Восприятие':2, 'Точность':1, 'Аналитика':2, 'Общение':2, 'Хитрость':1, 'Воля':2, 'Чутьё':0}},
+		'Ice':{Chars:{'Тело':1 , 'Бой':2, 'Выносливость':1, 'Ловкость':1, 'Восприятие':2, 'Точность':2, 'Аналитика':1, 'Общение':0, 'Хитрость':1, 'Воля':0, 'Чутьё':1}},
+		'Fight':{Chars:{'Тело':1 , 'Бой':2, 'Выносливость':1, 'Ловкость':2, 'Восприятие':1, 'Точность':2, 'Аналитика':0, 'Общение':1, 'Хитрость':1, 'Воля':0, 'Чутьё':1}},
+		'Poison':{Chars:{'Тело':2 , 'Бой':1, 'Выносливость':1, 'Ловкость':2, 'Восприятие':1, 'Точность':1, 'Аналитика':0, 'Общение':0, 'Хитрость':2, 'Воля':1, 'Чутьё':2}},
+		'Ground':{Chars:{'Тело':2 , 'Бой':1, 'Выносливость':3, 'Ловкость':1, 'Восприятие':1, 'Точность':0, 'Аналитика':1, 'Общение':1, 'Хитрость':1, 'Воля':0, 'Чутьё':1}},
+		'Flight':{Chars:{'Тело':1 , 'Бой':1, 'Выносливость':1, 'Ловкость':2, 'Восприятие':1, 'Точность':1, 'Аналитика':0, 'Общение':1, 'Хитрость':3, 'Воля':1, 'Чутьё':1}},
+		'Psycho':{Chars:{'Тело':1 , 'Бой':1, 'Выносливость':1, 'Ловкость':0, 'Восприятие':1, 'Точность':1, 'Аналитика':3, 'Общение':0, 'Хитрость':0, 'Воля':2, 'Чутьё':2}},
+		'Bug':{Chars:{'Тело':1 , 'Бой':1, 'Выносливость':1, 'Ловкость':3, 'Восприятие':1, 'Точность':2, 'Аналитика':0, 'Общение':1, 'Хитрость':2, 'Воля':0, 'Чутьё':1}},
+		'Stone':{Chars:{'Тело':1 , 'Бой':2, 'Выносливость':2, 'Ловкость':0, 'Восприятие':1, 'Точность':0, 'Аналитика':2, 'Общение':1, 'Хитрость':0, 'Воля':1, 'Чутьё':1}},
+		'Ghost':{Chars:{'Тело':1 , 'Бой':1, 'Выносливость':0, 'Ловкость':0, 'Восприятие':1, 'Точность':0, 'Аналитика':1, 'Общение':2, 'Хитрость':1, 'Воля':3, 'Чутьё':1}},
+		'Dragon':{Chars:{'Тело':2 , 'Бой':1, 'Выносливость':1, 'Ловкость':1, 'Восприятие':1, 'Точность':2, 'Аналитика':1, 'Общение':1, 'Хитрость':0, 'Воля':1, 'Чутьё':1}},
+		'Dark':{Chars:{'Тело':1 , 'Бой':2, 'Выносливость':1, 'Ловкость':1, 'Восприятие':0, 'Точность':2, 'Аналитика':1, 'Общение':1, 'Хитрость':1, 'Воля':1, 'Чутьё':1}},
+		'Steel':{Chars:{'Тело':2 , 'Бой':1, 'Выносливость':2, 'Ловкость':0, 'Восприятие':0, 'Точность':1, 'Аналитика':1, 'Общение':0, 'Хитрость':1, 'Воля':1, 'Чутьё':3}},
+		'Fairy':{Chars:{'Тело':1 , 'Бой':1, 'Выносливость':0, 'Ловкость':0, 'Восприятие':1, 'Точность':1, 'Аналитика':2, 'Общение':1, 'Хитрость':1, 'Воля':3, 'Чутьё':1}}
+	};
+	Chars = {
+		'Тело':{CountUse:3},
+		'Бой':{CountUse:3},
+		'Выносливость':{CountUse:3},
+		'Ловкость':{CountUse:3},
+		'Восприятие':{CountUse:3},
+		'Точность':{CountUse:3},
+		'Аналитика':{CountUse:3},
+		'Общение':{CountUse:3},
+		'Хитрость':{CountUse:3},
+		'Воля':{CountUse:3},
+		'Чутьё':{CountUse:3}
+	};
+	ElementsPokemon = [
+		'Normal'
+	];
+	Fibbonachi = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144];
+	Dice = [
+		'В',
+		'Б',
+		'У',
+		'М',
+		'Э',
+		'С',
+		'd6'
+	]
+	function DefineCurrentLevelDice(points, offset, tendency, start){
+		var resObj = {currentPosDice:start, currentPosFibbonachi:offset-tendency , currentDice:'-', XPToNext:1000000, leftPoints:points};
+		if (start >= 0)
+			resObj.currentDice = Dice[start];
+		if (resObj.currentPosFibbonachi<0){
+			currentPosDice += resObj.currentPosFibbonachi;
+			resObj.currentPosFibbonachi = 0;
+		}
+		while(true){
+			if (resObj.currentPosDice >= Dice.length-1) break;
+			if (resObj.currentPosFibbonachi >= Fibbonachi.length-1) break;
+			if (resObj.leftPoints < Fibbonachi[resObj.currentPosFibbonachi]) break;
+			resObj.currentPosDice ++;
+			resObj.currentDice = Dice[resObj.currentPosDice];
+			resObj.leftPoints -= Fibbonachi[resObj.currentPosFibbonachi];
+			resObj.currentPosFibbonachi ++;
+		}
+		resObj.XPToNext = Fibbonachi[resObj.currentPosFibbonachi];
+		return resObj;
+		
+		var result = start;
+		offset -= tendency;
+		if (offset < 0){
+			result -= offset;
+			offset = 0;
+		}
+		while ((offset<Fibbonachi.length)&&(Fibbonachi[offset]<=points)){
+			points -= Fibbonachi[offset];
+			offset++;
+			result++;
+		}
+		if (result>=Dice.length) result = Dice.length - 1;
+		return result;
+	}
+	function DefineDice(points, offset, tendency, start){
+		var currentLevel = DefineCurrentLevelDice(points, offset, tendency, start);
+		if (currentLevel<0) return '-';
+		return Dice[currentLevel];
+	}
+	function DefineNeedXPNextDice(points, offset, tendency, start){
+		var currentLevel = DefineCurrentLevelDice(points, offset, tendency, start);
+		if (currentLevel<0) return Dice[offset-tendency];
+		if (currentLevel>=Dice.length-1) return 1000000000;
+		return Dice[currentLevel+1];
+	}
+	function getTendency(nameChar){
+		var tendencyCount = 0;
+		ElementsPokemon.forEach(x=>tendencyCount+=Elements[x].Chars[nameChar]);
+		return tendencyCount;
+	}
+	function ShowCharTD(nameChar){
+		var tendencyCount = getTendency(nameChar);
+		var countUseLeft = Chars[nameChar].CountUse;
+		var startDice = 0;
+		var infoPoints = DefineCurrentLevelDice(countUseLeft, 6, tendencyCount, 0);
+		//{currentPosDice:start, currentPosFibbonachi:offset-tendency , , XPToNext:1000000, leftPoints:points};
+		var resStr = '';
+		resStr += '<tr>';
+		resStr += '<th>'+nameChar+'</th>';
+		resStr += '<td>'+infoPoints.currentDice+'</td>';
+		<!-- resStr += '<td>'+Chars[nameChar].CountUse+'</td>'; -->
+		resStr += '<td>'+'КНОПКА ЕЩЁ НЕ ИЗВЕСТЕН ВБУМЭС!'+'</td>';
+		resStr += '<td>'+tendencyCount+'</td>';
+		resStr += '<td><progress value="'+infoPoints.leftPoints+'" max="'+infoPoints.XPToNext+'"</progress></td>';
+		resStr += '</tr>';
+		
+		return resStr;
+	}
+	function HPMax(){
+		return 5+Object.keys(Chars).reduce((hpMax,x)=>
+			hpMax+DefineCurrentLevelDice(Chars[x].CountUse, 6, getTendency(x), 0)["currentPosDice"]
+			, 0);
+		//Chars
+		//reduce((t,y)=>{return (y>0)?t+1:t;},0);
+	}
+</script>
+	<table border=1 cellpadding=2 cellspacing=0 style="page-break-inside: avoid;">
+		<tr>
+			<th>Характеристика</th>
+			<th>Куб</th>
+			<!-- <th>Использование</th> -->
+			<th>Кнопка</th>
+			<th>Склонности</th>
+			<th>Прогресс</th>
+			<td>0 / ?</td>
+		</tr>
+<script>
+	Object.keys(Chars).forEach(x=>document.write(ShowCharTD(x)));
+</script>		
+	</table>
+	<table border=1 cellpadding=0 cellspacing=0 style="page-break-inside: avoid;">
+		<tr>
+			<th>Умение</th>
+			<th>Доп Куб</th>
+			<th>Кнопка</th>
+			<th>Склонности</th>
+			<th>Прогресс</th>
+			<th>Характеристики</th>
+			<td>0 / ?</td>
+		</tr>
+		<tr>
+			<th>Хиточки</th>
+			<td>Сумма максимальных значений всех характеристик
+			<script>
+				document.write(HPMax())
+			</script>
+			</td>
+			<td>Кнопка</td>
+			<td>Склонности</td>
+			<td>Прогресс</td>
+			<td>Характеристики</td>
+			<td>0 / ?</td>
+		</tr>
+		<tr>
+			<th>Атака</th>
+			<td>Доп Куб</td>
+			<td>Кнопка</td>
+			<td>Склонности</td>
+			<td>Прогресс</td>
+			<td>Бой+Точность</td>
+			<td>0 / ?</td>
+		</tr>
+		<tr>
+			<th>Защита</th>
+			<td>Доп Куб</td>
+			<td>Кнопка</td>
+			<td>Склонности</td>
+			<td>Прогресс</td>
+			<td>Тело+Выносливость</td>
+			<td>0 / ?</td>
+		</tr>
+		<tr>
+			<th>Спец атака</th>
+			<td>Доп Куб</td>
+			<td>Кнопка</td>
+			<td>Склонности</td>
+			<td>Прогресс</td>
+			<td>Воля+Восприятие</td>
+			<td>0 / ?</td>
+		</tr>
+		<tr>
+			<th>Спец защита</th>
+			<td>Доп Куб</td>
+			<td>Кнопка</td>
+			<td>Склонности</td>
+			<td>Прогресс</td>
+			<td>Чутьё+Аналитика</td>
+			<td>0 / ?</td>
+		</tr>
+		<tr>
+			<th>Скорость</th>
+			<td>Доп Куб</td>
+			<td>Кнопка</td>
+			<td>Склонности</td>
+			<td>Прогресс</td>
+			<td>Ловкость+Хитрость</td>
+			<td>0 / ?</td>
+		</tr>		
+	</table>
+	
+	
+	
+	
+	
+	<hr>
+	
+	
+	
+	
+	
+		<table border=1 cellpadding=0 cellspacing=0 style="page-break-inside: avoid;">
+			<tr>
+				<th>HP</th>
+				<td>0 / ?</td>
+			</tr>
+			<tr>
+				<th>Attack</th>
+				<td></td>
+			</tr>
+			<tr>
+				<th>Defence</th>
+				<td></td>
+			</tr>
+			<tr>
+				<th>Special Attack</th>
+				<td></td>
+			</tr>
+			<tr>
+				<th>Special Defence</th>
+				<td></td>
+			</tr>
+			<tr>
+				<th>Speed</th>
+				<td></td>
+			</tr>
+			<tr>
+				<th>Accuracy</th>
+				<td></td>
+			</tr>
+			<tr>
+				<th>Evasion</th>
+				<td></td>
+			</tr>
+		</table><table border=1 cellpadding=0 cellspacing=0 style="page-break-inside: avoid;">
+			<tr>
+				<th>Имя тренера</th>
+				<td></td>
+			</tr>
+			<tr>
+				<th>Отношения с тренером</th>
+				<td></td>
+				<!-- Как влияет на меня? -->
+			</tr>
+			<tr>
+				<th>Значки тренера</th>
+				<td></td>
+				<!-- Как влияет на меня? -->
+			</tr>
+			<tr>
+				<th>Деньги тренера</th>
+				<td></td>
+			</tr>
+			<tr>
+				<th>Цель тренера</th>
+				<td></td>
+			</tr>
+		</table>
+		<table border=1 cellpadding=0 cellspacing=0 style="page-break-inside: avoid;">
+			<tr>
+				<td colspan=3>Выбор типа даёт бонус и базовый набор статов</td>
+			</tr>
+			<tr>
+				<th>Тип 1</th>
+				<th>Тип 2</th>
+				<th>Тип 3</th>
+			</tr>
+			<tr>
+				<td>-</td>
+				<td>-</td>
+				<td>-</td>
+			</tr>
+			<tr>
+				<td colspan=3><ul>
+					<li></li>
+				</ul></td>
+			</tr>
+		</table>
+		<table border=1 cellpadding=0 cellspacing=0 style="page-break-inside: avoid;">
+			<tr>
+				<th colspan=3>Путь ...</th>				
+			</tr>
+			<tr>
+				<td> - </td>
+				<td> - </td>
+				<td> - </td>
+			</tr>
+			<tr>
+				<td> - </td>
+				<td> - </td>
+				<td> - </td>
+			</tr>
+			<tr>
+				<td> - </td>
+				<td> - </td>
+				<td> - </td>
+			</tr>
+			<tr>
+				<td colspan=3><ul>
+					<li></li>
+					<!-- //Бонусы от типа -->
+				</ul></td>
+			</tr>
+		</table>
+		
+		<table border=1 cellpadding=0 cellspacing=0 style="page-break-inside: avoid;">
+			<tr>
+				<th colspan=6>Действия</th>				
+			</tr>
+			<tr>
+				<th>Типы атаки(норм, огонь и т.д.)</th>				
+				<th>Категории (обычный, специальный, статус)</th>				
+				<th>PP</th>				
+				<th>Power</th>				
+				<th>Accuracy</th>				
+				<th>Damage</th>				
+			</tr>
+			<tr>
+				<td> - </td>	
+				<td> - </td>	
+				<td> - </td>	
+				<td> - </td>	
+				<td> - </td>	
+				<td> - </td>	
+			</tr>
+			
+		<!-- Урон =  -->
+	<!-- 2*уровень/5 + 2 -->
+	<!-- Сила хода/50 -->
+	<!-- Атака/Защита -->
+	<!-- Предмет подходящий(1.1?) -->
+	<!-- Крит ли -->
+	<!-- Бонус погоды(1.5?) -->
+	<!-- Значок тренера, если победил на соревнованиях -->
+	<!-- Бонус(1.5) если атака соответствует типу покемона -->
+	<!-- Бонусы или штрафы за соотношение типа атаки и типа атакуемого -->
+	<!-- Рандом (217-255)/255 -->
+	<!-- Бонус дружбы с покемоном/с тренером -->
+	<!-- Наличие мега покемоны поблизости -->
+	
+			
+			
+		</table>
+	</div>
+  	<hr>
+	<table>
+		<tr>
+			<th>Название/Имя</th>
+			<td><img src=""></img></td>
+		</tr>
+		<tr>
+			<th>Деревня</th>
+			<td><img src="https://cdn.discordapp.com/attachments/886650375665487952/1135146397319036938/img-hqzhMT1BbLD5V0MQTttTF.png"></img></td>
+		</tr>
+		<tr>
+			<th>Рина-Тян</th>
+			<td><img width="600px" src="https://cdn.discordapp.com/attachments/886650375665487952/1135148043520442418/img-rKpr8UFhKF6vWwlTafyOM.png"></img></td>
+		</tr>
+		<tr>
+			<th>Статуя покемона, спасшего от сели</th>
+			<td><img src="https://cdn.discordapp.com/attachments/886650375665487952/1110909123756818513/488fde186eccb1dde9696e050083d34a.png"></img></td>
+		</tr>
+		<tr>
+			<th>Покемон переэволюционировавший</th>
+			<td><img src="https://cdn.discordapp.com/attachments/886650375665487952/1110911100054155344/250px-0591Amoonguss.png"></img></td>
+		</tr>
+	</table>
+	<br>
+	<a href="https://docs.google.com/document/d/18EHuNLPUnWzHIbLtLk45EejDlClpDrMrtVQjHk1C9qI/edit">Тины</a>
+	<br>
+	<a href="https://bulbapedia.bulbagarden.net/">Энциклопедия</a>	
+	<br>
+	<a href="https://ru.pinterest.com/mryoohoo17/pokemon-trpg/">Pinterest</a>	
+</body>
