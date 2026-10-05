@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Весёлый слот</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <button class="icon-btn" id="muteBtn" type="button" title="Звук">🔊</button>
+  </div>
+
+  <main class="layout">
+    <!-- Таблица выигрышей -->
+    <aside class="panel paytable" aria-label="Таблица выигрышей">
+      <h2 class="panel-title">⭐ Таблица призов ⭐</h2>
+      <div id="paytableRows"></div>
+      <div class="paytable-note"><span class="mini-star">★</span> — любой символ</div>
+      <div class="price-tag">Стоимость игры: <b>10 монеток</b></div>
+    </aside>
+
+    <!-- Слот-машина -->
+    <section class="machine-wrap">
+      <div class="machine" id="machine">
+        <div class="bulbs bulbs-top" data-count="13"></div>
+        <div class="bulbs bulbs-left" data-count="9"></div>
+        <div class="bulbs bulbs-right" data-count="9"></div>
+        <div class="bulbs bulbs-bottom" data-count="13"></div>
+
+        <div class="cabinet">
+          <div class="sign"><span>ВЕСЁЛЫЙ СЛОТ</span></div>
+
+          <div class="balance-board">
+            <span class="balance-label">БАЛАНС:</span>
+            <span class="balance-value" id="balance">0</span>
+            <span class="balance-unit" id="balanceUnit">монеток</span>
+            <span class="balance-delta" id="balanceDelta"></span>
+          </div>
+
+          <div class="reels-frame" id="reelsFrame">
+            <div class="payline"></div>
+            <div class="reel" data-reel="0"><div class="reel-window"><div class="reel-strip"></div></div></div>
+            <div class="reel" data-reel="1"><div class="reel-window"><div class="reel-strip"></div></div></div>
+            <div class="reel" data-reel="2"><div class="reel-window"><div class="reel-strip"></div></div></div>
+          </div>
+
+          <div class="win-board" id="winBoard">
+            <div class="win-title" id="winTitle">Дёрни ручку!</div>
+            <div class="win-sub" id="winSub"></div>
+            <div class="win-math" id="winMath">Одна попытка — 10 монеток</div>
+          </div>
+
+          <div class="controls">
+            <button class="spin-btn" id="spinBtn" type="button" disabled>КРУТИТЬ</button>
+          </div>
+        </div>
+
+        <!-- Ручка -->
+        <div class="lever" id="lever" role="button" tabindex="0" aria-label="Ручка автомата">
+          <div class="lever-mount"></div>
+          <div class="lever-rod" id="leverRod"></div>
+          <div class="lever-knob" id="leverKnob"></div>
+          <div class="lever-hub"></div>
+        </div>
+      </div>
+
+      <button class="end-btn" id="endBtn" type="button" disabled>Закончить игру</button>
+    </section>
+
+    <!-- История -->
+    <aside class="panel history" aria-label="Последние вращения">
+      <h2 class="panel-title">Последние вращения</h2>
+      <table class="history-table">
+        <thead>
+          <tr><th>Комбинация</th><th>Выплата</th><th>Реальный итог</th></tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr class="history-empty"><td colspan="3">Здесь появятся последние 10 вращений</td></tr>
+        </tbody>
+      </table>
+    </aside>
+  </main>
+
+  <!-- Слой для конфетти, монеток и блёсток -->
+  <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+
+  <!-- Стартовое окно -->
+  <div class="overlay" id="startOverlay">
+    <form class="dialog start-dialog" id="startForm" novalidate>
+      <div class="dialog-coins">🟡🟡🟡</div>
+      <h1>Сколько монеток положим в&nbsp;автомат?</h1>
+      <label class="field">
+        <span>Стартовый баланс</span>
+        <input type="number" id="startInput" value="1000" min="10" max="1000000" step="1" inputmode="numeric" required>
+      </label>
+      <div class="presets">
+        <button type="button" data-value="100">100</button>
+        <button type="button" data-value="500">500</button>
+        <button type="button" data-value="1000">1000</button>
+      </div>
+      <div class="field-error" id="startError"></div>
+      <button class="big-btn" type="submit">НАЧАТЬ ИГРУ</button>
+      <p class="dialog-hint">Монетки ненастоящие. Одна попытка стоит 10 монеток. Для придачи веса можете выдавать по монетке за каждое приседание ребёнка.</p>
+    </form>
+  </div>
+
+  <!-- Итоговое окно -->
+  <div class="overlay hidden" id="resultOverlay">
+    <div class="dialog result-dialog" id="resultDialog"></div>
+  </div>
+
+  <!-- Debug-режим: открыть index.html?debug или нажать Ctrl+Shift+D -->
+  <div class="debug-panel hidden" id="debugPanel"></div>
+
+  <script src="js/symbols-config.js"></script>
+  <script src="js/logic.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
