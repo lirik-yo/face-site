@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Тесты слот-машины</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f8fafc; color: #0f172a; padding: 32px; }
+    h1 { margin-top: 0; }
+    li { margin: 4px 0; list-style: none; }
+    .ok { color: #15803d; } .fail { color: #b91c1c; font-weight: bold; }
+    .summary { font-size: 20px; padding: 12px 16px; border-radius: 8px; display: inline-block; margin-top: 16px; }
+    .summary.ok { background: #dcfce7; } .summary.fail { background: #fee2e2; }
+  </style>
+</head>
+<body>
+  <h1>Проверка таблицы выплат</h1>
+  <ul id="list"></ul>
+  <div id="summary" class="summary"></div>
+
+  <script src="../js/logic.js"></script>
+  <script src="payout.test.js"></script>
+  <script>
+    var results = runPayoutTests(SlotLogic);
+    var list = document.getElementById("list");
+    var failed = 0;
+    results.forEach(function (r) {
+      if (!r.ok) failed++;
+      var li = document.createElement("li");
+      li.className = r.ok ? "ok" : "fail";
+      li.textContent = (r.ok ? "✓ " : "✗ ") + r.name + (r.ok ? "" : " (получено " + r.actual + ", ожидалось " + r.expected + ")");
+      list.appendChild(li);
+    });
+    var s = document.getElementById("summary");
+    s.className = "summary " + (failed ? "fail" : "ok");
+    s.textContent = failed
+      ? "ОШИБКА: не пройдено " + failed + " из " + results.length
+      : "Все тесты пройдены (" + results.length + "). RTP = 90%.";
+  </script>
+</body>
+</html>
