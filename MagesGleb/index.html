@@ -42,6 +42,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .tab{background:none;border:none;border-bottom:2px solid transparent;padding:8px 12px;color:var(--muted);cursor:pointer;white-space:nowrap;font-size:14px}
 .tab:hover{color:var(--text)}
 .tab.active{color:var(--gold2);border-bottom-color:var(--gold)}
+.tab-ico,.tab-short{display:none}
 .tab .badge{display:inline-block;margin-left:5px;background:var(--panel2);border-radius:9px;padding:0 6px;font-size:11px;color:var(--gold)}
 
 main{max-width:1180px;margin:0 auto;padding:18px 16px 80px}
@@ -163,7 +164,7 @@ details.fold.section{margin:6px 0 14px}
 .thr.future .thr-badge{color:var(--muted)}
 
 /* ---------- elemental ---------- */
-.el-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+.el-grid{display:grid;grid-template-columns:1fr;gap:14px}
 .element{border-top:3px solid var(--c,var(--gold));margin:0}
 .element .el-name{font-size:21px;color:var(--c);flex:1}
 .el-fire{--c:var(--fire)} .el-water{--c:var(--water)} .el-earth{--c:var(--earth)} .el-air{--c:var(--air)}
@@ -473,6 +474,14 @@ details.fold.section{margin:6px 0 14px}
 .combo-step.broken{border-style:dashed;color:var(--warn,#e3a35a)}
 .combo-arrow{color:var(--muted)}
 
+.disc-level{border:1px dashed var(--line);border-radius:8px;padding:8px 10px;display:grid;gap:6px}
+
+/* золото до 7 цифр */
+#topbar .gold-val{width:96px}
+.big-num.gold-val{width:170px}
+.gold-counter{display:grid;justify-items:center;gap:8px}
+.gold-row{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+
 @media (max-width:760px){
   /* телефон: группы — панелью внизу экрана, шапка — только значения */
   .nav-groups.top{display:none}
@@ -482,6 +491,12 @@ details.fold.section{margin:6px 0 14px}
   .nav-groups.bottom .grp .ico{font-size:21px}
   .nav-groups.bottom .grp.active{background:var(--panel2)}
   main{padding-bottom:90px}
+  #tabs{padding:0 2px;overflow:visible;justify-content:space-around}
+  #tabs .tab{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 2px 6px;font-size:11px;position:relative}
+  #tabs .tab-full{display:none}
+  #tabs .tab-ico{display:block;font-size:19px;line-height:1.1}
+  #tabs .tab-short{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  #tabs .tab .badge{position:absolute;top:1px;right:calc(50% - 26px);margin:0;font-size:10px;padding:0 4px}
   #toasts{bottom:78px;right:10px;left:10px}
   #topbar{gap:8px;padding:6px 10px;flex-wrap:nowrap}
   #topbar .mini,#topbar .brand-sub,#topbar .save-dot{display:none}
@@ -499,7 +514,6 @@ details.fold.section{margin:6px 0 14px}
   .hero-top{flex-direction:column}
   .portrait{width:100%;height:260px}
   #topbar{gap:10px}
-  .el-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -519,7 +533,7 @@ details.fold.section{margin:6px 0 14px}
 /* =====================================================================
    STATE — константы, справочники, состояние по умолчанию
    ===================================================================== */
-const APP_VERSION = 6;
+const APP_VERSION = 10;
 const STORAGE_KEY = 'gleb-mages-rpg-state';
 const BACKUP_KEY = 'gleb-mages-rpg-backups';
 const FILE_PREFIX = 'gleb-mages-rpg';
@@ -532,12 +546,25 @@ const uid = (p = 'id') => p + '_' + (window.crypto && crypto.randomUUID
 
 // Параметры персонажа. Чтобы добавить новый — добавь строку сюда и поле в defaultState().
 // get/set нужны, если значение лежит не в character.stats.
+// Соотношение ран — правило игры: 3 лёгкие = средняя, 3 средние = тяжёлая, 3 тяжёлые = смерть.
+// Больше тяжёлых до смерти — только бонусами (дисциплины, предметы).
+const WOUND_RULES = { lightPerMedium: 3, mediumPerHeavy: 3, heavyToDeath: 3 };
+// Ячеек свободного аффикса без бонусов — 0 (первую даёт «Магическая теория»)
+const FREE_SLOT_BASE = 0;
+// Максимум маны = 50 + Сила магии + Защита от магии + Чувство магии (+ бонусы предметов и дисциплин)
+const MANA_BASE = 50;
+const MANA_STATS = ['magicPower', 'magicDefense', 'magicSense'];
+
 const STAT_DEFS = [
   { key: 'maxMana', name: 'Максимальная мана', short: 'Макс. мана',
-    get: s => s.character.mana.baseMax, set: (s, v) => { s.character.mana.baseMax = v; } },
+    get: () => MANA_BASE + MANA_STATS.reduce((t, k) => t + getTotal(k), 0), set: () => {} },
   { key: 'magicPower', name: 'Сила магии', allocatable: true, thresholds: true },
   { key: 'magicDefense', name: 'Защита от магии', allocatable: true, thresholds: true },
   { key: 'magicSense', name: 'Чувство магии', allocatable: true, thresholds: true },
+  { key: 'heavyToDeath', name: 'Тяжёлых ран до смерти', short: 'Тяжёлых ран до смерти',
+    get: () => WOUND_RULES.heavyToDeath, set: () => {} },
+  { key: 'freeSlots', name: 'Ячеек свободного аффикса', short: 'Ячеек свободного аффикса',
+    get: () => FREE_SLOT_BASE, set: () => {} },
 ];
 
 const OPS = {
@@ -549,6 +576,10 @@ const OPS = {
 const EFFECT_TYPES = {
   stat: 'Модификатор параметра',
   unlockForm: 'Открывает форму',
+  elementLevel: 'Повышает уровень стихии',
+  unlockStage: 'Открывает ступень стихии',
+  freeAffix: 'Даёт свободный аффикс',
+  unlockCombos: 'Открывает комбо',
 };
 
 const CONTRACT_STATUSES = {
@@ -582,11 +613,11 @@ const LINK_TYPES = {
 
 const EXPERIENCE_ITEMS = [
   ['studiedOrTaughtMagic', 'Изучал магию или обучал магии.'],
-  ['spiritualPracticeOrEntities', 'Использовал духовные практики или общался с потусторонними сущностями.'],
+  ['spiritualPracticeOrEntities', 'Использовал духовные практики или общался с потусторонними силами.'],
   ['learnedOrExperiencedNewMagic', 'Узнал что-то новое о магии или находился под новым магическим воздействием.'],
   ['defeatedEnemyOrUsedMagicCreatively', 'Сразил значимого врага магией или использовал магию оригинальным способом.'],
   ['contactedPowerPlaceOrArtifact', 'Контактировал с могущественным местом силы или артефактом.'],
-  ['exhaustedMana', 'Полностью исчерпал свой магический запас.'],
+  ['exhaustedMana', 'Подобрался к границам своих магических способностей.'],
 ];
 
 
@@ -666,7 +697,12 @@ const FORM_SEED = [
 // Описания аффиксов по умолчанию
 const AFFIX_DESCRIPTIONS = {
   "Укрепление": "Замедляет заклинание.\nТри Укрепления замедляют вдвое.",
+  "Избирательный": "Не попадает по своим.",
+  "Ласковый": "Пацифистичный: не наносит урон по своим.",
 };
+
+// Множители стоимости маны по ступеням — правило игры, берутся только отсюда (ключ «стихия|ступень»)
+const STAGE_MULTIPLIERS = new Map(ELEMENT_SEED.flatMap(e => e.stages.filter(st => st.m != null).map(st => [e.id + '|' + st.n, st.m])));
 
 // «Рост ×2, Укрепление ×1» → [{affixId, count}]. getAffix(name) находит или создаёт аффикс.
 function parseReqs(text, getAffix) {
@@ -699,7 +735,6 @@ function buildDefaultMagic() {
       const st = {
         id: uid('stage'), name: s.n, tier: s.t, minLevel: s.lvl ?? null, unlocked: false,
         parentId: s.from ? idByName[s.from] || null : null, requirements: s.rn || '', reqs: parseReqs(s.req, affix), description: s.d || '',
-        costMultiplier: s.m ?? null,
       };
       idByName[s.n] = st.id;
       el.stages.push(st);
@@ -708,13 +743,13 @@ function buildDefaultMagic() {
     return el;
   });
   const forms = FORM_SEED.map(f => {
-    const form = { id: uid('form'), name: f.n, description: f.d || '', level: 0, known: false, source: f.src || '', conditions: f.cond || '', levels: [] };
-    (f.a || []).forEach((an, i) => affix(an).links.push({ id: uid('link'), type: 'form', targetId: form.id, minLevel: f.aLvl?.[i] || 0 }));
+    const form = { id: uid('form'), name: f.n, description: f.d || '', known: false, source: f.src || '' };
+    (f.a || []).forEach(an => affix(an).links.push({ id: uid('link'), type: 'form', targetId: form.id }));
     return form;
   });
   for (const [name, text] of Object.entries(AFFIX_DESCRIPTIONS)) affix(name).description = text;
   affixes.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-  return { elements, forms, affixes, rules: { ...DEFAULT_RULES } };
+  return { elements, forms, affixes };
 }
 
 function defaultState() {
@@ -725,7 +760,7 @@ function defaultState() {
       title: '',
       portrait: '',
       bio: '',
-      mana: { current: 100, baseMax: 100 },
+      mana: { current: MANA_BASE },
       gold: 0,
       stats: { magicPower: 0, magicDefense: 0, magicSense: 0 },
       freeStatPoints: 50,
@@ -734,12 +769,13 @@ function defaultState() {
         light: { items: [] },
         medium: { items: [] },
         heavy: { items: [] },
-        lightPerMedium: 3,
-        mediumPerHeavy: 3,
-        heavyToDeath: 3,
       },
     },
-    disciplines: [],
+    disciplines: [{
+      id: uid('disc'), name: 'Магическая теория', level: 1, description: '',
+      levels: [{ id: uid('dlvl'), level: 1, title: 'Свободный аффикс', description: '',
+        effects: [{ id: uid('eff'), type: 'stat', stat: 'freeSlots', operation: 'add', value: 1 }] }],
+    }],
     inventory: [],
     arcaneSpells: [],
     elementalMagic: buildDefaultMagic(),
@@ -848,6 +884,41 @@ const MIGRATIONS = {
     s.version = 6;
     return s;
   },
+  // v6 → v7: соотношение ран — правило в коде; база ячеек свободного аффикса 0 (первую даёт «Магическая теория»)
+  6: s => {
+    const hp = s.character?.health;
+    if (hp) { delete hp.lightPerMedium; delete hp.mediumPerHeavy; delete hp.heavyToDeath; }
+    if (s.elementalMagic?.rules) s.elementalMagic.rules.freeSlots = 0;
+    s.version = 7;
+    return s;
+  },
+  // v7 → v8: база ячеек свободного аффикса и максимум маны больше не хранятся (правило и формула в коде)
+  7: s => {
+    if (s.elementalMagic) delete s.elementalMagic.rules;
+    if (s.character?.mana) delete s.character.mana.baseMax;
+    s.version = 8;
+    return s;
+  },
+  // v8 → v9: у форм больше нет уровней (и условий повышения), у связей «аффикс — форма» нет минимального уровня
+  8: s => {
+    const em = s.elementalMagic;
+    for (const f of em?.forms || []) { delete f.level; delete f.levels; delete f.conditions; }
+    for (const a of em?.affixes || []) for (const l of a.links || []) if (l.type === 'form') delete l.minLevel;
+    s.version = 9;
+    return s;
+  },
+  // v9 → v10: множители ступеней — из правил (не хранятся); новые аффиксы «Избирательный» и «Ласковый»
+  9: s => {
+    const em = s.elementalMagic;
+    for (const el of em?.elements || []) for (const st of el.stages || []) delete st.costMultiplier;
+    for (const [name, text] of Object.entries(AFFIX_DESCRIPTIONS)) {
+      const a = em?.affixes?.find(x => x.name.trim().toLowerCase() === name.toLowerCase());
+      if (!a) em?.affixes?.push({ id: uid('affix'), name, description: text, requirements: '', notes: '', links: [] });
+      else if (!a.description?.trim()) a.description = text;
+    }
+    s.version = 10;
+    return s;
+  },
 };
 
 function migrate(s) {
@@ -869,6 +940,36 @@ function fillMissing(t, d) {
 }
 
 // Дозаполняет отсутствующие поля, чтобы старые/неполные сохранения не ломали интерфейс
+// Ступени стихий — правило игры из ELEMENT_SEED. При каждом открытии пересобираются из страницы:
+// ярус, уровень открытия, «растёт из», требования, описание и аффиксы ступени. От сохранения берутся только id и «открыта».
+function syncStagesFromSeed(s) {
+  const em = s.elementalMagic;
+  const getAffix = name => {
+    let a = em.affixes.find(x => x.name.trim().toLowerCase() === name.toLowerCase());
+    if (!a) { a = { id: uid('affix'), name, description: '', requirements: '', notes: '', links: [] }; em.affixes.push(a); }
+    return a;
+  };
+  for (const seed of ELEMENT_SEED) {
+    let el = em.elements.find(e => e.id === seed.id);
+    if (!el) { el = { id: seed.id, name: seed.name, level: 0, description: seed.description, conditions: '', stages: [] }; em.elements.push(el); }
+    const old = el.stages || [];
+    const prevByName = new Map(old.map(st => [String(st.name || '').trim().toLowerCase(), st]));
+    const idByName = {}, stages = [];
+    for (const sd of seed.stages) {
+      const prev = prevByName.get(sd.n.toLowerCase());
+      const st = { id: prev?.id || uid('stage'), name: sd.n, tier: sd.t, minLevel: sd.lvl ?? null, unlocked: !!prev?.unlocked,
+        parentId: sd.from ? idByName[sd.from] || null : null, requirements: sd.rn || '', reqs: parseReqs(sd.req, getAffix), description: sd.d || '' };
+      idByName[sd.n] = st.id;
+      stages.push(st);
+    }
+    // связи «аффикс — ступень» этой стихии собираем заново по правилам
+    const ids = new Set([...old.map(st => st.id), ...stages.map(st => st.id)]);
+    for (const a of em.affixes) a.links = (a.links || []).filter(l => !(l.type === 'stage' && ids.has(l.targetId)));
+    for (const sd of seed.stages) for (const an of sd.a || []) getAffix(an).links.push({ id: uid('link'), type: 'stage', targetId: idByName[sd.n] });
+    el.stages = stages;
+  }
+}
+
 function normalize(s) {
   const d = defaultState();
   // ранения из старого формата (только число) — до fillMissing, иначе подставится пустой список
@@ -878,6 +979,7 @@ function normalize(s) {
       t.items = Array.from({ length: Number(t.current) || 0 }, () => ({ id: uid('wound'), text: '', date: new Date().toISOString() }));
   }
   fillMissing(s, d);
+  syncStagesFromSeed(s);
   const em = s.elementalMagic;
   for (const de of d.elementalMagic.elements)
     if (!em.elements.some(e => e.id === de.id)) em.elements.push({ ...de, stages: [] });
@@ -886,10 +988,9 @@ function normalize(s) {
     e.level ??= 0;
     for (const st of e.stages) st.reqs ||= [];
   }
-  em.rules = { ...DEFAULT_RULES, ...em.rules };
   for (const a of em.affixes) a.links ||= [];
-  for (const f of em.forms) f.levels ||= [];
   for (const it of s.inventory) it.effects ||= [];
+  for (const d of s.disciplines) { d.levels ||= []; for (const lv of d.levels) lv.effects ||= []; }
   for (const n of s.npcs) {
     n.kind ||= 'person';
     n.aliases = toTags(n.aliases);
@@ -907,6 +1008,9 @@ function normalize(s) {
   for (const [id, text] of EXPERIENCE_ITEMS)
     if (!s.experience.items.some(i => i.id === id)) s.experience.items.push({ id, text, checked: false, note: '', log: [] });
   for (const i of s.experience.items) i.log ||= [];
+  // тексты пунктов — правило игры, всегда берутся из страницы (в сохранении — только отметки, заметки и журнал)
+  const expTexts = Object.fromEntries(EXPERIENCE_ITEMS);
+  for (const i of s.experience.items) if (expTexts[i.id]) i.text = expTexts[i.id];
   return s;
 }
 
@@ -938,11 +1042,21 @@ function loadState() {
 }
 
 let saveTimer = null;
+// Что пишется в сохранение и экспорт: ступени стихий — только id, название и отметка «открыта» (остальное — правила из страницы)
+function serializeState(pretty) {
+  const em = state.elementalMagic;
+  const slim = { ...state, elementalMagic: { ...em,
+    elements: em.elements.map(el => ({ ...el, stages: el.stages.map(st => ({ id: st.id, name: st.name, unlocked: !!st.unlocked })) })),
+    // связи «аффикс — ступень» тоже из правил: при открытии собираются заново
+    affixes: em.affixes.map(a => ({ ...a, links: (a.links || []).filter(l => l.type !== 'stage') })) } };
+  return pretty ? JSON.stringify(slim, null, 2) : JSON.stringify(slim);
+}
+
 function saveState() {
   clearTimeout(saveTimer);
   saveTimer = null;
   try {
-    store.set(STORAGE_KEY, JSON.stringify(state));
+    store.set(STORAGE_KEY, serializeState());
     document.getElementById('saveDot')?.classList.remove('dirty');
   } catch (e) {
     console.error(e);
@@ -967,7 +1081,7 @@ function getBackups() {
 }
 function createBackup(label = 'Ручная копия') {
   const list = getBackups();
-  list.unshift({ id: uid('bk'), date: new Date().toISOString(), label, data: JSON.stringify(state) });
+  list.unshift({ id: uid('bk'), date: new Date().toISOString(), label, data: serializeState() });
   while (list.length > MAX_BACKUPS) list.pop();
   try {
     store.set(BACKUP_KEY, JSON.stringify(list));
@@ -990,7 +1104,7 @@ function downloadText(text, filename) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 function exportJSON() {
-  downloadText(JSON.stringify(state, null, 2), `${FILE_PREFIX}-${dateStamp()}.json`);
+  downloadText(serializeState(true), `${FILE_PREFIX}-${dateStamp()}.json`);
   toast('Файл экспортирован', 'ok');
 }
 function replaceState(data, label) {
@@ -1033,14 +1147,31 @@ function setBase(key, v) {
   const d = statDef(key);
   if (d?.set) d.set(state, v); else state.character.stats[key] = v;
 }
-function statModifiers(key) {
-  const res = [];
-  for (const it of state.inventory) {
-    if (!it.equipped) continue;
-    for (const ef of it.effects || []) if (ef.type === 'stat' && ef.stat === key) res.push({ item: it, ef });
-  }
+// Всё, что сейчас «надето»: используемые предметы и записи дисциплин, чей уровень достигнут.
+// item.name — подпись источника для расшифровки бонусов.
+function activeEffectSources() {
+  const res = state.inventory.filter(it => it.equipped).map(it => ({ name: it.name, effects: it.effects || [] }));
+  for (const d of state.disciplines) for (const lv of d.levels || [])
+    if ((Number(d.level) || 0) >= (Number(lv.level) || 0))
+      res.push({ name: `${d.name} ур. ${lv.level}`, effects: lv.effects || [], discipline: true });
   return res;
 }
+function statModifiers(key) {
+  const res = [];
+  for (const src of activeEffectSources())
+    for (const ef of src.effects) if (ef.type === 'stat' && ef.stat === key) res.push({ item: src, ef });
+  return res;
+}
+// Активные эффекты нужного типа: [{ src, ef }]
+const activeEffects = type => activeEffectSources().flatMap(src => src.effects.filter(e => e.type === type).map(ef => ({ src, ef })));
+const elementBonus = id => activeEffects('elementLevel').filter(x => x.ef.elementId === id);
+const elLevel = el => Math.max(0, (Number(el.level) || 0) + elementBonus(el.id).reduce((t, x) => t + (Number(x.ef.value) || 0), 0));
+const stageOpeners = id => activeEffects('unlockStage').filter(x => x.ef.stageId === id).map(x => x.src.name);
+const freeAffixGivers = id => activeEffects('freeAffix').filter(x => x.ef.affixId === id).map(x => x.src.name);
+// Раздел «Комбо» доступен, пока есть активный эффект «Открывает комбо»
+const comboGivers = () => activeEffects('unlockCombos').map(x => x.src.name);
+const isFreeAffix = a => a.links.some(l => l.type === 'free') || freeAffixGivers(a.id).length > 0;
+const bonusText = key => statModifiers(key).map(({ item, ef }) => `${opText(ef)} от «${item.name}»`).join(', ');
 // total = base + активные модификаторы (сначала +/−, потом ×)
 function getTotal(key) {
   let add = 0, mul = 1;
@@ -1105,9 +1236,10 @@ function findStage(id) {
 }
 const hasMinLevel = st => st.minLevel !== null && st.minLevel !== undefined && st.minLevel !== '';
 // Уровень 0 = стихия не изучена: ни она, ни её ступени недоступны
-const isElementAvailable = el => (Number(el.level) || 0) >= 1;
+const isElementAvailable = el => elLevel(el) >= 1 || el.stages.some(st => stageOpeners(st.id).length);
 const elementLockReason = el => isElementAvailable(el) ? '' : `${el.name} не изучена (уровень 0)`;
-const isStageAvailable = (el, st) => isElementAvailable(el) && (!!st.unlocked || (hasMinLevel(st) && el.level >= Number(st.minLevel)));
+const isStageAvailable = (el, st) => stageOpeners(st.id).length > 0
+  || (elLevel(el) >= 1 && (!!st.unlocked || (hasMinLevel(st) && elLevel(el) >= Number(st.minLevel))));
 function stageLockReason(el, st) {
   if (isStageAvailable(el, st)) return '';
   if (!isElementAvailable(el)) return elementLockReason(el);
@@ -1116,7 +1248,8 @@ function stageLockReason(el, st) {
 }
 
 const formUnlockers = id => state.inventory.filter(i => (i.effects || []).some(e => e.type === 'unlockForm' && e.targetId === id));
-const isFormAvailable = f => !!f.known || formUnlockers(f.id).some(i => i.equipped);
+const formUnlockedByDiscipline = id => activeEffectSources().some(src => src.discipline && src.effects.some(e => e.type === 'unlockForm' && e.targetId === id));
+const isFormAvailable = f => !!f.known || formUnlockers(f.id).some(i => i.equipped) || formUnlockedByDiscipline(f.id);
 function formLockReason(f) {
   if (isFormAvailable(f)) return '';
   const u = formUnlockers(f.id);
@@ -1129,7 +1262,7 @@ function formLockReason(f) {
 function newLink(type, targetId = '') {
   const l = { id: uid('link'), type };
   if (type !== 'free') l.targetId = targetId;
-  if (type === 'element' || type === 'form') l.minLevel = 0;
+  if (type === 'element') l.minLevel = 0;
   return l;
 }
 function linkStatus(l) {
@@ -1138,7 +1271,7 @@ function linkStatus(l) {
       const el = findElement(l.targetId);
       if (!el) return { ok: false, reason: 'стихия не указана' };
       const need = Math.max(1, Number(l.minLevel) || 0);
-      return el.level >= need ? { ok: true } : { ok: false, reason: `требуется ${el.name} ${need}` };
+      return elLevel(el) >= need ? { ok: true } : { ok: false, reason: `требуется ${el.name} ${need}` };
     }
     case 'stage': {
       const r = findStage(l.targetId);
@@ -1149,9 +1282,7 @@ function linkStatus(l) {
     case 'form': {
       const f = findForm(l.targetId);
       if (!f) return { ok: false, reason: 'форма не найдена' };
-      if (!isFormAvailable(f)) return { ok: false, reason: `форма «${f.name}»: ${formLockReason(f)}` };
-      const need = Number(l.minLevel) || 0;
-      return f.level >= need ? { ok: true } : { ok: false, reason: `требуется ${f.name} ${need}` };
+      return isFormAvailable(f) ? { ok: true } : { ok: false, reason: `форма «${f.name}»: ${formLockReason(f)}` };
     }
     case 'free': return { ok: true };
   }
@@ -1161,7 +1292,7 @@ function linkLabel(l) {
   switch (l.type) {
     case 'element': { const el = findElement(l.targetId); return `${el ? el.name : '?'}${l.minLevel ? ' ≥ ' + l.minLevel : ''}`; }
     case 'stage': { const r = findStage(l.targetId); return r ? `${r.el.name}: ${r.st.name}` : 'ступень удалена'; }
-    case 'form': { const f = findForm(l.targetId); return `Форма: ${f ? f.name : '?'}${l.minLevel ? ' ≥ ' + l.minLevel : ''}`; }
+    case 'form': { const f = findForm(l.targetId); return `Форма: ${f ? f.name : '?'}`; }
     case 'free': return 'Свободный';
   }
   return '?';
@@ -1180,7 +1311,7 @@ function optionFromLinks(a, links) {
 const sortOpts = arr => arr.sort((a, b) => (a.locked - b.locked) || a.label.localeCompare(b.label, 'ru'));
 
 function freeAffixOptions() {
-  return sortOpts(EM().affixes.filter(a => a.links.some(l => l.type === 'free')).map(a => ({ id: a.id, label: a.name })));
+  return sortOpts(EM().affixes.filter(isFreeAffix).map(a => ({ id: a.id, label: a.name })));
 }
 
 /* =====================================================================
@@ -1189,16 +1320,12 @@ function freeAffixOptions() {
    Выбираются: стихия, ступень, форма и свободные аффиксы.
    ===================================================================== */
 // Правила (уточнены у мастера): при превращении аффиксы тратятся, потраченные ячейки не заполняются заново,
-// аффиксы самой стихии в требования не засчитываются.
-// Настраиваемое (вкладка «Стихийная магия»): число ячеек свободных аффиксов и множители стоимости по уровню ступени.
-const DEFAULT_RULES = {
-  freeSlots: 1,                                        // ячеек свободных аффиксов (может вырасти по ходу игры)
-};
-const rules = () => EM().rules;
+// аффиксы самой стихии в требования не засчитываются. Пояснение для игроков — в справке («Превращения и стоимость»).
 
 // Ключи ячеек свободных аффиксов: freeAffixId, freeAffixId2, freeAffixId3…
 const freeKey = i => i ? 'freeAffixId' + (i + 1) : 'freeAffixId';
-const freeKeys = () => Array.from({ length: Math.max(1, Number(rules().freeSlots) || 1) }, (_, i) => freeKey(i));
+const freeSlotCount = () => clamp(Math.round(getTotal('freeSlots')) || 0, 0, 5);
+const freeKeys = () => Array.from({ length: freeSlotCount() }, (_, i) => freeKey(i));
 
 // Учитывает ступени, полученные превращением в этом заклинании (obj.chain)
 const stageOkFor = (d, el, st) => isStageAvailable(el, st) || !!d.chain?.includes(st.id);
@@ -1222,7 +1349,7 @@ function elementAffixesOf(obj) {
 function formAffixesOf(obj, includeConsumed) {
   const f = findForm(obj.formId);
   if (!f) return [];
-  const ids = EM().affixes.filter(a => a.links.some(l => l.type === 'form' && l.targetId === f.id && f.level >= (Number(l.minLevel) || 0)))
+  const ids = EM().affixes.filter(a => a.links.some(l => l.type === 'form' && l.targetId === f.id))
     .sort(byName).map(a => a.id);
   if (includeConsumed) return ids;
   const spent = [...(obj.consumedForm || [])];
@@ -1236,7 +1363,7 @@ const withAffixes = (label, ids) => ids.length ? label + ' — ' + ids.map(affNa
 function spellParts() {
   return [
     { key: 'elementId', label: 'Стихия', css: 'el',
-      options: () => EM().elements.map(e => ({ id: e.id, label: `${ELEMENT_ICON[e.id] || ''} ${e.name} (ур. ${e.level})`,
+      options: () => EM().elements.map(e => ({ id: e.id, label: `${ELEMENT_ICON[e.id] || ''} ${e.name} (ур. ${elLevel(e)})`,
         locked: !isElementAvailable(e), reason: elementLockReason(e) })),
       name: id => findElement(id)?.name },
     { key: 'stageId', label: 'Ступень стихии', deps: ['elementId'],
@@ -1247,7 +1374,7 @@ function spellParts() {
       },
       name: id => findStage(id)?.st.name },
     { key: 'formId', label: 'Форма',
-      options: () => sortOpts(EM().forms.map(f => ({ id: f.id, label: withAffixes(`${f.name} (ур. ${f.level})`, formAffixesOf({ formId: f.id })), locked: !isFormAvailable(f), reason: formLockReason(f) }))),
+      options: () => sortOpts(EM().forms.map(f => ({ id: f.id, label: withAffixes(f.name, formAffixesOf({ formId: f.id })), locked: !isFormAvailable(f), reason: formLockReason(f) }))),
       name: id => findForm(id)?.name },
     ...freeKeys().map((key, i) => ({ key, label: 'Свободный аффикс' + (i ? ' ' + (i + 1) : ''), affix: true, free: true,
       options: freeAffixOptions, name: affName })),
@@ -1403,7 +1530,7 @@ function stageLevel(el, st, seen = new Set()) {
   return st.tier === 'linear' ? 1 : null; // стартовая ступень; у мастерских без «родителя» уровень неизвестен
 }
 // Множитель стоимости — свой у каждой ступени, задаётся вручную (Кровь ×8, Древний лёд ×4…)
-const stageMultiplier = st => st.costMultiplier === null || st.costMultiplier === undefined || st.costMultiplier === '' ? null : Number(st.costMultiplier);
+const stageMultiplier = (el, st) => STAGE_MULTIPLIERS.get(el.id + '|' + st.name) ?? null;
 function magicLevelOf(obj) {
   const r = findStage(obj.stageId);
   return r ? stageLevel(r.el, r.st) : null;
@@ -1415,8 +1542,8 @@ function costCalc(obj) {
   if (!obj.stageId) return { error: 'выбери ступень стихии' };
   const r = findStage(obj.stageId), count = spellAffixCount(obj);
   if (!r) return { error: 'ступень удалена', count };
-  const level = stageLevel(r.el, r.st), mult = stageMultiplier(r.st), stage = r.st.name;
-  if (mult == null) return { error: `у ступени «${stage}» не задан множитель (вкладка «Стихийная магия», поле × в строке ступени)`, count, level, stage };
+  const level = stageLevel(r.el, r.st), mult = stageMultiplier(r.el, r.st), stage = r.st.name;
+  if (mult == null) return { error: `у ступени «${stage}» нет множителя в правилах`, count, level, stage };
   return { cost: Math.round(count * mult), count, level, mult, stage };
 }
 // Итоговая стоимость: своя (если включена) или расчётная; у тайных заклинаний — указанная
@@ -1478,6 +1605,13 @@ const field = (label, ctrl, cls = '') => h('label', { class: 'field ' + cls }, h
 const toolbar = (...kids) => h('div', { class: 'toolbar' }, ...kids);
 const has = (q, ...s) => s.some(x => String(x || '').toLowerCase().includes(q));
 const byName = (a, b) => (a.name || '').localeCompare(b.name || '', 'ru');
+
+// Название для нового: текст из поиска (если что-то искали), иначе заготовка. Поиск очищается, чтобы новое было видно.
+function nameFromSearch(key, fallback) {
+  const q = (ui.search[key] || '').trim();
+  ui.search[key] = '';
+  return q || fallback;
+}
 
 function txt(obj, key, o = {}) {
   return h(o.multi ? 'textarea' : 'input', {
@@ -1577,24 +1711,24 @@ function toast(msg, kind = 'info') {
    ===================================================================== */
 const TABS = [
   { id: 'character', name: 'Персонаж', render: renderCharacterTab },
-  { id: 'dice', name: '🎲 Кубики', render: renderDiceTab },
-  { id: 'disciplines', name: 'Дисциплины', render: renderDisciplinesTab },
-  { id: 'inventory', name: 'Инвентарь', render: renderInventoryTab },
-  { id: 'arcane', name: 'Тайная магия', render: renderArcaneTab },
-  { id: 'elemental', name: 'Стихийная магия', render: renderElementalTab },
-  { id: 'spellbook', name: 'Книга заклинаний', render: renderSpellbookTab },
-  { id: 'untested', name: 'Непроверенные комбинации', render: renderUntestedTab,
+  { id: 'dice', icon: '🎲', short: 'Кубики', name: '🎲 Кубики', render: renderDiceTab },
+  { id: 'disciplines', icon: '🎓', short: 'Дисциплины', name: 'Дисциплины', render: renderDisciplinesTab },
+  { id: 'inventory', icon: '🎒', short: 'Инвентарь', name: 'Инвентарь', render: renderInventoryTab },
+  { id: 'arcane', icon: '🔮', short: 'Тайная', name: 'Тайная магия', render: renderArcaneTab },
+  { id: 'elemental', icon: '🔥', short: 'Стихии', name: 'Стихийная магия', render: renderElementalTab },
+  { id: 'spellbook', icon: '📖', short: 'Книга', name: 'Книга заклинаний', render: renderSpellbookTab },
+  { id: 'untested', icon: '🧪', short: 'Пробы', name: 'Непроверенные комбинации', render: renderUntestedTab,
     badge: untestedBadge },
-  { id: 'experience', name: 'Дополнительный опыт', render: renderExperienceTab,
+  { id: 'experience', icon: '⭐', short: 'Опыт', name: 'Дополнительный опыт', render: renderExperienceTab,
     badge: () => { const n = state.experience.items.filter(i => i.checked).length; return n ? n + '/' + state.experience.items.length : ''; } },
-  { id: 'chronicle', name: 'Летопись', render: renderChronicleTab, badge: () => state.chronicle.length || '' },
-  { id: 'quests', name: 'Квесты и планы', render: renderQuestsTab,
+  { id: 'chronicle', icon: '📜', short: 'Летопись', name: 'Летопись', render: renderChronicleTab, badge: () => state.chronicle.length || '' },
+  { id: 'quests', icon: '🎯', short: 'Квесты', name: 'Квесты и планы', render: renderQuestsTab,
     badge: () => state.quests.filter(q => !QUEST_FINISHED.includes(q.status)).length || '' },
-  { id: 'npc', name: 'NPC', render: renderNpcTab, badge: () => state.npcs.length || '' },
-  { id: 'geo', name: 'География', render: renderGeoTab, badge: () => state.geography.locations.length || '' },
-  { id: 'data', name: 'Данные', render: renderDataTab },
-  { id: 'help', name: '❓ Справка', render: renderHelpTab },
-  { id: 'martial', name: 'Боевое искусство', render: renderMartialTab },
+  { id: 'npc', icon: '👤', short: 'NPC', name: 'NPC', render: renderNpcTab, badge: () => state.npcs.length || '' },
+  { id: 'geo', icon: '🗺', short: 'Карта', name: 'География', render: renderGeoTab, badge: () => state.geography.locations.length || '' },
+  { id: 'data', icon: '💾', short: 'Данные', name: 'Данные', render: renderDataTab },
+  { id: 'help', icon: '❓', short: 'Справка', name: '❓ Справка', render: renderHelpTab },
+  { id: 'martial', icon: '⚔', short: 'Бой', name: 'Боевое искусство', render: renderMartialTab },
 ];
 
 // Группы вкладок. Нажатие на группу открывает последнюю вкладку, где была в этой группе.
@@ -1666,11 +1800,13 @@ function manaBar(thin) {
 
 // Кнопки −100 −10 −1 [поле] +1 +10 +100
 const STEPS = [100, 10, 1];
-function stepCounter(fn, middle, cls) {
+const GOLD_STEPS = [10000, 1000, 100, 10, 1];
+const stepLabel = n => n >= 1000 ? n / 1000 + 'к' : String(n);
+function stepCounter(fn, middle, cls, steps = STEPS) {
   return [
-    STEPS.map(s => btn('−' + s, () => fn(-s), cls)),
+    steps.map(s => btn('−' + stepLabel(s), () => fn(-s), cls, false, '−' + s)),
     middle,
-    STEPS.slice().reverse().map(s => btn('+' + s, () => fn(s), cls)),
+    steps.slice().reverse().map(s => btn('+' + stepLabel(s), () => fn(s), cls, false, '+' + s)),
   ];
 }
 
@@ -1688,7 +1824,7 @@ function renderHeader() {
       manaBar(true)),
     h('div', { class: 'mini' },
       h('span', { class: 'lbl' }, '💰 Золото'),
-      stepCounter(adjGold, num(c, 'gold', { min: 0, class: 'gold-val' }), 'small')),
+      stepCounter(adjGold, num(c, 'gold', { min: 0, class: 'gold-val' }), 'small', GOLD_STEPS)),
     healthMini(),
     h('div', { class: 'hdr-compact' },
       h('span', { class: 'hc-hp' + (hits() <= 0 ? ' dead' : '') }, `❤ ${Math.max(0, hits())}/${maxHits()}`),
@@ -1711,8 +1847,11 @@ function renderTabs() {
     const t = TABS.find(x => x.id === id);
     if (!t) return null;
     const b = t.badge ? t.badge() : '';
-    return h('button', { class: 'tab' + (state.ui.tab === t.id ? ' active' : ''), onclick: () => goTab(t.id) },
-      t.name, b !== '' ? h('span', { class: 'badge' }, b) : null);
+    // на широком экране — полное имя; на телефоне — иконка и короткое имя (как в нижнем меню)
+    return h('button', { class: 'tab' + (state.ui.tab === t.id ? ' active' : ''), onclick: () => goTab(t.id), title: t.name },
+      h('span', { class: 'tab-full' }, t.name),
+      h('span', { class: 'tab-ico' }, t.icon || ''), h('span', { class: 'tab-short' }, t.short || t.name),
+      b !== '' ? h('span', { class: 'badge' }, b) : null);
   }).filter(Boolean) : []));
 }
 
@@ -1749,9 +1888,10 @@ function manaPanel() {
       stepCounter(adjMana, h('div', { class: 'counter-val' }, num(m, 'current', { min: 0, max: maxMana, class: 'big-num' }), h('span', { class: 'of' }, '/ ' + max)), 'big')),
     manaBar(),
     h('div', { class: 'row small' },
-      h('span', { class: 'muted' }, 'Базовый максимум:'), num(m, 'baseMax', { min: 0 }),
+      h('span', { class: 'muted', title: 'Максимум маны = 50 + Сила магии + Защита от магии + Чувство магии' },
+        `Максимум: ${MANA_BASE}`, MANA_STATS.map(k => ` + ${statDef(k).name.toLowerCase()} ${getTotal(k)}`).join('')),
       mods.map(({ item, ef }) => chip(`${item.name}: ${opText(ef)}`, 'mod')),
-      h('span', { class: 'muted' }, '= итого ' + max),
+      h('span', { class: 'muted' }, '= ' + max),
       h('span', { class: 'grow' }),
       btn('Восстановить полностью', () => { m.current = maxMana(); commit(); }, 'small')));
 }
@@ -1760,8 +1900,11 @@ function goldPanel() {
   const c = state.character;
   return h('section', { class: 'panel' },
     h('div', { class: 'panel-title' }, '💰 Золото'),
-    h('div', { class: 'big-counter' },
-      stepCounter(adjGold, h('div', { class: 'counter-val' }, num(c, 'gold', { min: 0, class: 'big-num gold-val' })), 'big')));
+    // три ряда: минусы, число, плюсы — чтобы десять кнопок и 7 цифр помещались на любом экране
+    h('div', { class: 'gold-counter' },
+      h('div', { class: 'gold-row' }, GOLD_STEPS.map(n => btn('−' + stepLabel(n), () => adjGold(-n), 'big', false, '−' + n))),
+      num(c, 'gold', { min: 0, class: 'big-num gold-val' }),
+      h('div', { class: 'gold-row' }, GOLD_STEPS.slice().reverse().map(n => btn('+' + stepLabel(n), () => adjGold(n), 'big', false, '+' + n)))));
 }
 
 function statsPanel() {
@@ -1852,7 +1995,7 @@ function renderDisciplinesTab(v) {
     filter: (d, q) => has(q, d.name, d.description), renderItem: disciplineCard, empty: 'Дисциплин пока нет.',
   });
   v.append(toolbar(btn('+ Добавить дисциплину', () => {
-    const d = { id: uid('disc'), name: 'Новая дисциплина', level: 0, description: '' };
+    const d = { id: uid('disc'), name: nameFromSearch('disc', 'Новая дисциплина'), level: 0, description: '', levels: [] };
     ui.focusName = d.id;
     state.disciplines.push(d);
     ui.editing.add(d.id);
@@ -1861,24 +2004,55 @@ function renderDisciplinesTab(v) {
 }
 
 function disciplineCard(d) {
-  const ed = ui.editing.has(d.id);
+  const ed = ui.editing.has(d.id), cur = Number(d.level) || 0;
+  const levels = (d.levels ||= []).slice().sort((a, b) => a.level - b.level);
+  const levelView = lv => {
+    const on = cur >= (Number(lv.level) || 0);
+    return h('div', { class: 'thr ' + (on ? 'reached' : 'future') },
+      h('span', { class: 'thr-badge' }, (on ? '✦ ' : '○ ') + 'ур. ' + lv.level),
+      h('div', { class: 'grow' },
+        lv.title ? h('b', null, lv.title) : null,
+        lv.description ? h('div', { class: 'small desc', style: 'margin:2px 0 0' }, rich(lv.description)) : null,
+        (lv.effects || []).length ? h('div', { class: 'chips' }, lv.effects.map(e => chip(effectLabel(e), on ? 'mod' : 'locked'))) : null,
+        !on ? h('div', { class: 'small muted' }, 'не действует — уровень дисциплины ниже') : null));
+  };
   return h('div', { class: 'card' },
     h('div', { class: 'card-head' },
       h('div', { class: 'card-title' }, d.name || 'Без названия'),
       h('span', { class: 'muted small' }, 'уровень'), levelCtl(d, 'level'), editToggle(d.id)),
     ed ? h('div', { class: 'form' },
       field('Название', txt(d, 'name', { nameFor: d.id })),
-      field('Описание', txt(d, 'description', { multi: true, rows: 4 })),
+      field('Описание', txt(d, 'description', { multi: true, rows: 3 })),
+      h('div', { class: 'sub' },
+        h('div', { class: 'sub-title' }, 'Что дают уровни — записывай, когда получаешь'),
+        levels.map(lv => h('div', { class: 'disc-level' },
+          h('div', { class: 'grid3' },
+            field('Уровень', num(lv, 'level', { min: 0 })),
+            field('Название', txt(lv, 'title', { placeholder: 'быстрый бег…' })),
+            h('div', { style: 'align-self:end' }, btn('✕ убрать запись', () => {
+              if (confirm(`Убрать запись уровня ${lv.level}${lv.title ? ' «' + lv.title + '»' : ''}?`)) { d.levels.splice(d.levels.indexOf(lv), 1); commit(); }
+            }, 'ghost danger small'))),
+          field('Описание', txt(lv, 'description', { multi: true, rows: 2 })),
+          effectsEditor(lv, 'Эффекты (действуют, пока дисциплина этого уровня или выше)'))),
+        h('div', null, btn('+ запись уровня', () => {
+          d.levels.push({ id: uid('dlvl'), level: Math.max(1, cur), title: '', description: '', effects: [] });
+          commit();
+        }, 'ghost small'))),
       dangerRow('Удалить дисциплину', () => removeWithConfirm(state.disciplines, d, `Удалить дисциплину «${d.name}»?`)))
-      : d.description ? h('div', { class: 'desc' }, rich(d.description)) : null);
+      : [d.description ? h('div', { class: 'desc' }, rich(d.description)) : null,
+         levels.length ? h('div', { class: 'thr-list' }, levels.map(levelView)) : null]);
 }
 
 /* =====================================================================
    ITEMS — инвентарь и модификаторы
    ===================================================================== */
 function effectLabel(ef) {
+  if (ef.type === 'elementLevel') return `${findElement(ef.elementId)?.name || 'Стихия'} +${Number(ef.value) || 0} ур.`;
+  if (ef.type === 'unlockStage') { const r = findStage(ef.stageId); return `Открывает ступень: ${r ? r.el.name + ' › ' + r.st.name : '?'}`; }
+  if (ef.type === 'freeAffix') return `Свободный аффикс: ${affName(ef.affixId) || '?'}`;
   if (ef.type === 'stat') return `${statDef(ef.stat)?.short || statDef(ef.stat)?.name || ef.stat} ${opText(ef)}`;
   if (ef.type === 'unlockForm') return `Открывает форму: ${findForm(ef.targetId)?.name || '?'}`;
+  if (ef.type === 'unlockCombos') return 'Открывает комбо';
   return ef.type;
 }
 
@@ -1891,7 +2065,7 @@ function renderInventoryTab(v) {
   const dup = dupControls('item', state.inventory, itemCard);
   v.append(toolbar(
     btn('+ Добавить предмет', () => {
-      const it = { id: uid('item'), name: 'Новый предмет', image: '', description: '', quantity: 1, equipped: false, notes: '', effects: [] };
+      const it = { id: uid('item'), name: nameFromSearch('inv', 'Новый предмет'), image: '', description: '', quantity: 1, equipped: false, notes: '', effects: [] };
       ui.focusName = it.id;
       state.inventory.push(it);
       ui.editing.add(it.id);
@@ -1928,27 +2102,42 @@ function itemEditor(it) {
     dangerRow('Удалить предмет', () => removeWithConfirm(state.inventory, it, `Удалить предмет «${it.name}»?`)));
 }
 
-function effectsEditor(it) {
+function effectsEditor(it, title = 'Эффекты предмета (действуют, пока предмет используется)') {
   const forms = EM().forms.slice().sort(byName);
-  return h('div', { class: 'sub' },
-    h('div', { class: 'sub-title' }, 'Эффекты предмета (действуют, пока предмет используется)'),
-    it.effects.map(ef => h('div', { class: 'row' },
-      sel(ef.type, Object.entries(EFFECT_TYPES), val => {
-        ef.type = val;
-        if (val === 'stat') { ef.stat ??= 'maxMana'; ef.operation ??= 'add'; ef.value ??= 0; }
-        else ef.targetId ??= '';
-        commit();
-      }),
-      ef.type === 'stat' ? [
+  const blank = type => ({
+    stat: { stat: 'maxMana', operation: 'add', value: 0 }, unlockForm: { targetId: '' },
+    elementLevel: { elementId: '', value: 1 }, unlockStage: { stageId: '' }, freeAffix: { affixId: '' }, unlockCombos: {},
+  })[type];
+  const fields = ef => {
+    switch (ef.type) {
+      case 'stat': return [
         sel(ef.stat, STAT_DEFS.map(d => [d.key, d.name]), val => { ef.stat = val; commit(); }),
         sel(ef.operation, Object.entries(OPS).map(([k, o]) => [k, o.label]), val => { ef.operation = val; commit(); }),
-        num(ef, 'value', { float: true, step: 'any' }),
-      ] : sel(ef.targetId || '', [['', forms.length ? '— выбери форму —' : '— сначала создай форму —'], ...forms.map(f => [f.id, f.name])],
-        val => { ef.targetId = val; commit(); }),
+        num(ef, 'value', { float: true, step: 'any' })];
+      case 'unlockForm': return sel(ef.targetId || '', [['', forms.length ? '— выбери форму —' : '— сначала создай форму —'], ...forms.map(f => [f.id, f.name])],
+        val => { ef.targetId = val; commit(); });
+      case 'elementLevel': return [
+        sel(ef.elementId || '', [['', '— стихия —'], ...EM().elements.map(e => [e.id, (ELEMENT_ICON[e.id] || '') + ' ' + e.name])], val => { ef.elementId = val; commit(); }),
+        h('span', { class: 'muted small' }, '+'), num(ef, 'value', { class: 'lvl-num' }), h('span', { class: 'muted small' }, 'ур.')];
+      case 'unlockStage': return sel(ef.stageId || '', [['', '— ступень —'], ...EM().elements.map(e => ({ group: e.name, items: e.stages.map(st => [st.id, st.name]) }))],
+        val => { ef.stageId = val; commit(); });
+      case 'freeAffix': return sel(ef.affixId || '', [['', '— аффикс —'], ...EM().affixes.slice().sort(byName).map(a => [a.id, a.name])],
+        val => { ef.affixId = val; commit(); });
+    }
+    return null;
+  };
+  return h('div', { class: 'sub' },
+    h('div', { class: 'sub-title' }, title),
+    it.effects.map(ef => h('div', { class: 'row' },
+      sel(ef.type, Object.entries(EFFECT_TYPES), val => { Object.assign(ef, { type: val }, blank(val)); commit(); }),
+      fields(ef),
       btn('✕', () => { it.effects.splice(it.effects.indexOf(ef), 1); commit(); }, 'ghost danger small sq', false, 'Убрать эффект'))),
     h('div', { class: 'row' },
-      btn('+ модификатор параметра', () => { it.effects.push({ id: uid('eff'), type: 'stat', stat: 'maxMana', operation: 'add', value: 0 }); commit(); }, 'ghost small'),
-      btn('+ открывает форму', () => { it.effects.push({ id: uid('eff'), type: 'unlockForm', targetId: '' }); commit(); }, 'ghost small')));
+      sel('', [['', '+ добавить эффект…'], ...Object.entries(EFFECT_TYPES)], val => {
+        if (!val) return;
+        it.effects.push({ id: uid('eff'), type: val, ...blank(val) });
+        commit();
+      })));
 }
 
 /* =====================================================================
@@ -1962,7 +2151,7 @@ function renderArcaneTab(v) {
   v.append(
     h('p', { class: 'hint' }, 'Тайная школа — список готовых заклинаний. Кнопка «Применить» списывает стоимость с текущей маны.'),
     toolbar(btn('+ Добавить заклинание', () => {
-      const s = { id: uid('arc'), name: 'Новое заклинание', description: '', manaCost: 0, level: '', notes: '', uses: 0 };
+      const s = { id: uid('arc'), name: nameFromSearch('arcane', 'Новое заклинание'), description: '', manaCost: 0, level: '', notes: '', uses: 0 };
       state.arcaneSpells.push(s);
       ui.editing.add(s.id);
       commit();
@@ -2001,15 +2190,16 @@ function renderElementalTab(v) {
   const em = EM();
   v.append(
     h('p', { class: 'hint' },
-      'Стихийное заклинание = стихия + аффикс стихии + форма + аффикс формы + свободный аффикс. ',
+      'Стихийное заклинание = стихия и её ступень (со всеми аффиксами) + форма (со всеми аффиксами) + свободные аффиксы. ',
       'Уровень стихии 0 — стихия не изучена и недоступна. ',
       'Ступени стихии (Огонь → Яростное пламя → …, Дым, Плазма) — развитие самой стихии по схемам; ',
       'ступень открывается сама при нужном уровне стихии или вручную галочкой «открыта». ',
       'Формы (Стрела, Барьер…) — отдельный справочник. Все аффиксы живут в одном справочнике, а их принадлежность задаётся связями.'),
+    toolbar(collapseBtn([...em.elements.map(e => e.id), ...em.elements.flatMap(e => e.stages.map(s => s.id)), ...em.forms.map(f => f.id), ...em.affixes.map(a => a.id)],
+      ['el-elements', 'el-free', 'el-forms', 'el-affixes', 'stages-', 'formlv-']), helpBtn('transform', 'Как работают превращения и стоимость')),
     fold('el-elements', 'Стихии', h('div', { class: 'el-grid' }, em.elements.map(elementCard)), true, 'section'),
     h('div', { id: 'free-affixes' }),
     fold('el-free', `Мои свободные аффиксы (${availableFreeAffixes().length})`, freeAffixesSection(), true, 'section'),
-    fold('el-rules', '⚗ Правила превращений и стоимость', rulesPanel(), false, 'section'),
     fold('el-forms', `Формы (${em.forms.length})`, formsSection(), true, 'section'),
     fold('el-affixes', `Аффиксы — единый справочник (${em.affixes.length})`, affixesSection(), false, 'section'));
 }
@@ -2035,9 +2225,11 @@ function freeAffixesSection() {
     items: () => EM().affixes.slice().sort(byName),
     filter: (a, q) => has(q, a.name),
     renderItem: a => {
-      const on = a.links.some(l => l.type === 'free');
-      return h('label', { class: 'chk free-item' + (on ? ' on' : '') },
-        h('input', { type: 'checkbox', checked: on, onchange: e => { setFree(a, e.target.checked); commit(); } }), a.name);
+      const own = a.links.some(l => l.type === 'free'), given = freeAffixGivers(a.id);
+      const on = own || given.length > 0;
+      return h('label', { class: 'chk free-item' + (on ? ' on' : ''), title: given.length ? 'Даёт: ' + given.join(', ') : null },
+        h('input', { type: 'checkbox', checked: on, disabled: !own && given.length > 0, onchange: e => { setFree(a, e.target.checked); commit(); } }),
+        a.name, given.length && !own ? h('span', { class: 'muted small' }, ' ✦') : null);
     },
     empty: 'Аффиксов нет.',
   });
@@ -2047,8 +2239,12 @@ function freeAffixesSection() {
       'Отметь галочкой аффиксы, которые ты можешь использовать как свободные. Они появятся в конструкторе заклинаний ',
       'и в непроверенных комбинациях.'),
     h('div', { class: 'chips', style: 'margin-bottom:10px' }, frees.length
-      ? frees.map(a => h('span', { class: 'chip free tag' }, a.name,
-          h('button', { type: 'button', class: 'x', title: 'Убрать из свободных', onclick: () => { setFree(a, false); commit(); } }, '×')))
+      ? frees.map(a => {
+          const given = freeAffixGivers(a.id), own = a.links.some(l => l.type === 'free');
+          return h('span', { class: 'chip free tag', title: given.length ? 'Даёт: ' + given.join(', ') : null }, a.name,
+            own ? h('button', { type: 'button', class: 'x', title: 'Убрать из свободных', onclick: () => { setFree(a, false); commit(); } }, '×')
+              : h('span', { class: 'muted small' }, ' ✦ ' + given.join(', ')));
+        })
       : h('span', { class: 'small muted' }, 'Пока ни одного.')),
     toolbar(L.input,
       h('input', { placeholder: 'новый свободный аффикс', oninput: e => { fresh.name = e.target.value; }, onkeydown: e => { if (e.key === 'Enter') create(); } }),
@@ -2057,21 +2253,19 @@ function freeAffixesSection() {
 }
 
 function elementCard(el) {
-  const ed = ui.editing.has(el.id), learned = isElementAvailable(el);
+  const learned = isElementAvailable(el);
   const avail = el.stages.filter(st => isStageAvailable(el, st));
   return h('section', { class: 'panel element el-' + el.id + (learned ? '' : ' unlearned') },
     h('div', { class: 'card-head' },
       h('div', { class: 'el-name' }, (ELEMENT_ICON[el.id] || '') + ' ' + el.name),
       elementScheme(el.id) ? btn('?', () => showScheme(el), 'ghost small sq help-btn', false, 'Схема превращений') : null,
-      h('span', { class: 'muted small' }, 'уровень'), levelCtl(el, 'level'), editToggle(el.id)),
+      h('span', { class: 'muted small' }, 'уровень'), levelCtl(el, 'level'),
+      elementBonus(el.id).length ? chip(`= ${elLevel(el)} (${elementBonus(el.id).map(x => '+' + x.ef.value + ' от «' + x.src.name + '»').join(', ')})`, 'mod') : null),
     h('div', { class: 'small', style: 'margin-top:4px' }, learned
       ? [h('span', { class: 'muted' }, 'Доступно: '), avail.length ? avail.map(s => s.name).join(', ') : h('span', { class: 'muted' }, 'ничего')]
       : h('span', { class: 'lock' }, '🔒 Не изучена — подними уровень до 1, чтобы открыть стихию')),
-    ed ? h('div', { class: 'form' },
-      field('Описание', txt(el, 'description', { multi: true })),
-      field('Условия повышения уровня', txt(el, 'conditions', { multi: true, placeholder: 'когда станут известны' })))
-      : [el.description ? h('div', { class: 'desc small muted' }, rich(el.description)) : null,
-         el.conditions ? h('div', { class: 'desc small' }, h('b', null, 'Повышение: '), rich(el.conditions)) : null],
+    el.description ? h('div', { class: 'desc small muted' }, rich(el.description)) : null,
+    el.conditions ? h('div', { class: 'desc small' }, h('b', null, 'Повышение: '), rich(el.conditions)) : null,
     fold('stages-' + el.id, `Ступени и уровни (${el.stages.length})`, stagesList(el)));
 }
 
@@ -2082,17 +2276,11 @@ function stagesList(el) {
     if (!list.length) continue;
     out.push(h('div', { class: 'tier-title' }, label), list.map(st => stageRow(el, st)));
   }
-  out.push(btn('+ ступень', () => {
-    const st = { id: uid('stage'), name: 'Новая ступень', tier: 'advanced', minLevel: null, unlocked: false, parentId: null, requirements: '', reqs: [], description: '' };
-    el.stages.push(st);
-    ui.editing.add(st.id);
-    commit();
-  }, 'ghost small'));
   return h('div', null, out);
 }
 
 function stageRow(el, st) {
-  const ok = isStageAvailable(el, st), ed = ui.editing.has(st.id), affs = affixesForTarget('stage', st.id);
+  const ok = isStageAvailable(el, st), affs = affixesForTarget('stage', st.id);
   const parent = st.parentId ? el.stages.find(s => s.id === st.parentId) : null;
   return h('div', { class: 'stage ' + (ok ? 'ok' : 'locked') },
     h('div', { class: 'stage-head' },
@@ -2100,91 +2288,19 @@ function stageRow(el, st) {
       h('b', null, st.name),
       hasMinLevel(st) ? chip('открывается с ур. ' + st.minLevel) : null,
       chip('ур. ' + (stageLevel(el, st) ?? '?'), '', stageLevel(el, st) == null ? 'Уровень неизвестен: укажи, из какой ступени она растёт' : 'Уровень ступени — шагов от стартовой'),
-      h('label', { class: 'stage-lvl small' + (stageMultiplier(st) == null ? ' unset' : ''), title: 'Множитель стоимости маны для этой ступени' },
-        '💧 ×', stageMultInput(st)),
+      stageMultiplier(el, st) != null ? chip('💧 ×' + stageMultiplier(el, st), 'affix', 'Множитель стоимости маны для этой ступени')
+        : chip('💧 ×?', 'locked', 'В правилах нет множителя для этой ступени'),
       parent ? h('span', { class: 'muted small' }, '← ' + parent.name) : null,
       h('span', { class: 'grow' }),
       h('label', { class: 'chk small', title: 'Отметить, что ступень открыта (независимо от уровня)' },
-        h('input', { type: 'checkbox', checked: st.unlocked, onchange: e => { st.unlocked = e.target.checked; commit(); } }), 'открыта'),
-      editToggle(st.id)),
+        h('input', { type: 'checkbox', checked: st.unlocked, onchange: e => { st.unlocked = e.target.checked; commit(); } }), 'открыта')),
+    stageOpeners(st.id).length ? h('div', { class: 'small plan' }, '✦ открыта: ' + stageOpeners(st.id).join(', ')) : null,
     affs.length ? h('div', { class: 'chips' }, affs.map(a => chip(a.name, ok ? 'affix' : 'locked', affTip(a.id)))) : null,
     st.reqs?.length ? h('div', { class: 'small muted', style: 'margin-top:3px' }, 'Требуется: ', h('span', { class: 'req-text' }, reqText(st.reqs))) : null,
     st.requirements ? h('div', { class: 'small muted', style: 'margin-top:3px' }, '📝 ', rich(st.requirements)) : null,
-    !ed && st.description ? h('div', { class: 'small desc', style: 'margin-top:3px' }, rich(st.description)) : null,
-    ed ? stageEditor(el, st) : null);
+    st.description ? h('div', { class: 'small desc', style: 'margin-top:3px' }, rich(st.description)) : null);
 }
 
-// Поле «множитель стоимости» — в строке ступени и в её редакторе
-function stageMultInput(st) {
-  return h('input', {
-    type: 'number', min: 0, step: 'any', class: 'lvl-num', placeholder: '?', value: st.costMultiplier ?? '',
-    onchange: e => {
-      const v = parseFloat(String(e.target.value).replace(',', '.'));
-      st.costMultiplier = e.target.value === '' || !isFinite(v) ? null : Math.max(0, v);
-      commit();
-    },
-  });
-}
-
-// Требования для превращения в эту ступень: аффикс × количество
-function reqsEditor(st) {
-  const all = EM().affixes.slice().sort(byName);
-  return h('div', { class: 'sub' },
-    h('div', { class: 'sub-title' }, 'Требуется для превращения (аффиксы в заклинании)'),
-    st.reqs.length ? st.reqs.map(q => h('div', { class: 'row small' },
-      sel(q.affixId, all.map(a => [a.id, a.name]), val => { q.affixId = val; commit(); }),
-      '×', num(q, 'count', { min: 1, class: 'lvl-num' }),
-      btn('✕', () => { st.reqs.splice(st.reqs.indexOf(q), 1); commit(); }, 'ghost danger small sq', false, 'Убрать требование')))
-      : h('div', { class: 'small muted' }, 'Требований нет — превращением в эту ступень не попасть.'),
-    h('div', null, sel('', [['', '+ добавить требование…'], ...all.map(a => [a.id, a.name])], val => {
-      if (!val) return;
-      const same = st.reqs.find(q => q.affixId === val);
-      if (same) same.count++; else st.reqs.push({ id: uid('req'), affixId: val, count: 1 });
-      commit();
-    })));
-}
-
-function rulesPanel() {
-  const r = rules();
-  return h('div', { class: 'panel' },
-    h('p', { class: 'hint', style: 'margin-bottom:8px' },
-      'Превращение: если аффиксы формы и свободные аффиксы закрывают требования ступени, которая растёт из текущей, ',
-      'стихия превращается в эту ступень — только для этого заклинания. Потраченные аффиксы становятся «—» и заново не заполняются; ',
-      'аффиксы самой стихии в требования не засчитываются.'),
-    h('p', { class: 'hint', style: 'margin-bottom:8px' },
-      'Стоимость заклинания = число всех аффиксов (кроме потраченных) × множитель итоговой ступени (после превращения). ',
-      'Множитель у каждой ступени свой — поле «💧 ×» в строке ступени. Уровень ступени (шагов от стартовой) считается сам.'),
-    h('div', { class: 'rules' },
-      h('label', { class: 'row rule' }, 'Ячеек свободных аффиксов сейчас:',
-        num(r, 'freeSlots', { min: 1, class: 'lvl-num', onChange: () => {
-          r.freeSlots = Math.min(5, r.freeSlots);
-          ui.untestedSample = []; ui.untestedResults = {};
-          commit();
-        } }))));
-}
-
-function stageEditor(el, st) {
-  return h('div', { class: 'form' },
-    h('div', { class: 'grid2' },
-      field('Название', txt(st, 'name')),
-      field('Ярус', sel(st.tier, Object.entries(TIERS), val => { st.tier = val; commit(); })),
-      field('Открывается сама с уровня стихии', h('input', {
-        type: 'number', min: 0, class: 'num', placeholder: 'вручную', value: hasMinLevel(st) ? st.minLevel : '',
-        onchange: e => { st.minLevel = e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0); commit(); } })),
-      field('Множитель стоимости маны', stageMultInput(st)),
-      field('Растёт из ступени', sel(st.parentId || '', [['', '—'], ...el.stages.filter(s => s !== st).map(s => [s.id, s.name])],
-        val => { st.parentId = val || null; commit(); }))),
-    reqsEditor(st),
-    field('Заметка к условиям получения', txt(st, 'requirements', { placeholder: 'если есть что-то кроме аффиксов' })),
-    field('Описание', txt(st, 'description', { multi: true, rows: 2 })),
-    targetAffixEditor('stage', st.id, false),
-    dangerRow('Удалить ступень', () => removeWithConfirm(el.stages, st, `Удалить ступень «${st.name}»? Связи аффиксов с ней тоже будут удалены.`, () => {
-      for (const s of el.stages) if (s.parentId === st.id) s.parentId = null;
-      for (const a of EM().affixes) a.links = a.links.filter(l => !(l.type === 'stage' && l.targetId === st.id));
-    })));
-}
-
-// Редактор аффиксов «со стороны цели» (ступени или формы). Связи хранятся в самих аффиксах.
 function targetAffixEditor(type, targetId, withLevel) {
   const linked = EM().affixes.flatMap(a => a.links.filter(l => l.type === type && l.targetId === targetId).map(l => ({ a, l })));
   const others = EM().affixes.filter(a => !linked.some(x => x.a === a)).sort(byName);
@@ -2223,7 +2339,7 @@ function formsSection() {
     empty: 'Форм пока нет. Добавь первую — например, «Стрела» или «Барьер».',
   });
   return h('div', null, toolbar(btn('+ Добавить форму', () => {
-    const f = { id: uid('form'), name: 'Новая форма', description: '', level: 0, known: true, source: '', conditions: '', levels: [] };
+    const f = { id: uid('form'), name: nameFromSearch('forms', 'Новая форма'), description: '', known: true, source: '' };
     ui.focusName = f.id;
     ui.search.forms = '';
     EM().forms.push(f);
@@ -2238,7 +2354,7 @@ function formCard(f) {
   return h('div', { class: 'card' + (ok ? '' : ' locked') },
     h('div', { class: 'card-head' },
       h('div', { class: 'card-title' }, (ok ? '' : '🔒 ') + f.name),
-      h('span', { class: 'muted small' }, 'уровень'), levelCtl(f, 'level'), editToggle(f.id)),
+      editToggle(f.id)),
     h('div', { class: 'row small', style: 'margin-top:4px' },
       h('label', { class: 'chk', title: 'Форма изучена персонажем сама по себе' },
         h('input', { type: 'checkbox', checked: f.known, onchange: e => { f.known = e.target.checked; commit(); } }), 'изучена'),
@@ -2246,48 +2362,20 @@ function formCard(f) {
       !ok ? h('span', { class: 'lock' }, formLockReason(f)) : null,
       f.source ? h('span', { class: 'muted' }, 'Источник: ' + f.source) : null),
     linked.length ? h('div', { class: 'chips' }, linked.map(({ a, l }) =>
-      chip(a.name + (l.minLevel ? ` (ур. ${l.minLevel})` : ''), linkStatus(l).ok ? 'affix' : 'locked', linkStatus(l).reason || affTip(a.id)))) : null,
+      chip(a.name, linkStatus(l).ok ? 'affix' : 'locked', linkStatus(l).reason || affTip(a.id)))) : null,
     ed ? formEditor(f) : [
-      f.description ? h('div', { class: 'desc' }, rich(f.description)) : null,
-      f.conditions ? h('div', { class: 'desc small' }, h('b', null, 'Повышение: '), rich(f.conditions)) : null,
-      f.levels.length ? fold('formlv-' + f.id, `Уровни формы (${f.levels.length})`, levelsView(f.levels, f.level)) : null]);
+      f.description ? h('div', { class: 'desc' }, rich(f.description)) : null]);
 }
 
 function formEditor(f) {
   return h('div', { class: 'form' },
     h('div', { class: 'grid2' }, field('Название', txt(f, 'name', { nameFor: f.id })), field('Источник получения', txt(f, 'source'))),
     field('Описание', txt(f, 'description', { multi: true })),
-    field('Условия повышения уровня', txt(f, 'conditions', { multi: true, rows: 2 })),
-    levelsEditor(f.levels),
-    targetAffixEditor('form', f.id, true),
+    targetAffixEditor('form', f.id, false),
     dangerRow('Удалить форму', () => removeWithConfirm(EM().forms, f,
       `Удалить форму «${f.name}»? Связи аффиксов с ней будут удалены, а заклинания в книге покажут «удалено».`, () => {
         for (const a of EM().affixes) a.links = a.links.filter(l => !(l.type === 'form' && l.targetId === f.id));
       })));
-}
-
-function levelsView(levels, current) {
-  return h('div', { class: 'thr-list' }, levels.slice().sort((a, b) => a.level - b.level).map(lv =>
-    h('div', { class: 'thr ' + (current >= lv.level ? 'reached' : 'future') },
-      h('span', { class: 'thr-badge' }, 'ур. ' + lv.level),
-      h('div', { class: 'grow' },
-        h('b', null, lv.name || ''), lv.description ? h('div', { class: 'small desc', style: 'margin:0' }, rich(lv.description)) : null,
-        lv.conditions ? h('div', { class: 'small muted' }, 'Условия: ', rich(lv.conditions)) : null))));
-}
-
-function levelsEditor(levels) {
-  return h('div', { class: 'sub' },
-    h('div', { class: 'sub-title' }, 'Уровни владения'),
-    levels.map(lv => h('div', { class: 'grid3' },
-      field('Уровень', num(lv, 'level', { min: 0 })),
-      field('Название уровня', txt(lv, 'name', { placeholder: 'необязательно' })),
-      field('Условия получения', txt(lv, 'conditions')),
-      field('Описание', txt(lv, 'description')),
-      h('div', { style: 'align-self:end' }, btn('✕ убрать уровень', () => { levels.splice(levels.indexOf(lv), 1); commit(); }, 'ghost danger small')))),
-    h('div', null, btn('+ уровень', () => {
-      levels.push({ id: uid('lvl'), level: levels.length ? Math.max(...levels.map(l => l.level)) + 1 : 1, name: '', description: '', conditions: '' });
-      commit();
-    }, 'ghost small')));
 }
 
 function affixesSection() {
@@ -2303,7 +2391,7 @@ function affixesSection() {
   });
   return h('div', null, toolbar(
     btn('+ Добавить аффикс', () => {
-      const a = { id: uid('affix'), name: 'Новый аффикс', description: '', requirements: '', notes: '', links: [] };
+      const a = { id: uid('affix'), name: nameFromSearch('affixes', 'Новый аффикс'), description: '', requirements: '', notes: '', links: [] };
       ui.focusName = a.id;
       ui.open['el-affixes'] = true;
       EM().affixes.push(a);
@@ -2350,10 +2438,11 @@ function linksEditor(a) {
   };
   return h('div', { class: 'sub' },
     h('div', { class: 'sub-title' }, 'Где доступен аффикс (связи)'),
-    a.links.map(l => h('div', { class: 'row small' },
-      sel(l.type, Object.entries(LINK_TYPES), val => { a.links[a.links.indexOf(l)] = newLink(val); commit(); }),
+    a.links.map(l => l.type === 'stage' ? h('div', { class: 'row small' }, chip(linkLabel(l), 'affix'), h('span', { class: 'muted' }, 'ступень стихии — из правил'))
+      : h('div', { class: 'row small' },
+      sel(l.type, Object.entries(LINK_TYPES).filter(([k]) => k !== 'stage'), val => { a.links[a.links.indexOf(l)] = newLink(val); commit(); }),
       targetSelect(l),
-      l.type === 'element' || l.type === 'form' ? ['мин. уровень', num(l, 'minLevel', { min: 0, class: 'lvl-num' })] : null,
+      l.type === 'element' ? ['мин. уровень', num(l, 'minLevel', { min: 0, class: 'lvl-num' })] : null,
       btn('✕', () => { a.links.splice(a.links.indexOf(l), 1); commit(); }, 'ghost danger small sq', false, 'Удалить связь'))),
     h('div', { class: 'row' },
       btn('+ связь', () => { a.links.push(newLink('element')); commit(); }, 'ghost small'),
@@ -2506,7 +2595,11 @@ function comboSpellItems(first) {
 const parseStepValue = v => { const i = v.indexOf(':'); return { id: uid('step'), kind: v.slice(0, i), spellId: v.slice(i + 1) }; };
 
 function combosSection() {
-  const list = state.combos;
+  const list = state.combos, givers = comboGivers();
+  if (!givers.length) return h('div', { class: 'panel', style: 'margin-top:18px' },
+    h('div', { class: 'row' }, h('h2', { style: 'margin:0' }, '🔒 Комбо'), helpBtn('combos', 'Что такое комбо')),
+    h('p', { class: 'hint', style: 'margin:8px 0 0' }, 'Раздел закрыт. Он открывается, пока используется предмет или изучена дисциплина ',
+      'с эффектом «Открывает комбо».', list.length ? ` Твои комбо (${list.length}) сохранены и появятся снова.` : ''));
   return h('div', null,
     h('div', { class: 'row', style: 'margin-top:18px' },
       h('h2', { style: 'margin:0' }, `🔗 Комбо (${list.length})`),
@@ -2517,7 +2610,8 @@ function combosSection() {
         ui.focusName = c.id;
         commit();
       }, 'primary small'),
-      helpBtn('combos', 'Что такое комбо')),
+      helpBtn('combos', 'Что такое комбо'),
+      h('span', { class: 'muted small' }, '✦ ' + givers.join(', '))),
     h('div', { class: 'list', style: 'margin-top:10px' }, list.length ? list.map(comboCard)
       : h('div', { class: 'empty' }, 'Комбо пока нет. Комбо — это связка заклинаний из книги и тайной школы, применяемая подряд.')));
 }
@@ -2619,7 +2713,7 @@ function costField(obj, onChange) {
 const comboKey = o => comboFields().map(k => o[k] || '').join('|');
 const UNTESTED_SAMPLE = 10;
 const UNTESTED_TRANSFORM_QUOTA = 3;
-const availableFreeAffixes = () => EM().affixes.filter(a => a.links.some(l => l.type === 'free' && linkStatus(l).ok)).sort(byName);
+const availableFreeAffixes = () => EM().affixes.filter(a => a.links.some(l => l.type === 'free' && linkStatus(l).ok) || freeAffixGivers(a.id).length).sort(byName);
 
 // Наборы свободных аффиксов без учёта порядка (повторы разрешены: Укрепление + Укрепление)
 function freeTuples(ids, k) {
@@ -2849,10 +2943,11 @@ const newWound = (text = '') => ({ id: uid('wound'), text, date: new Date().toIS
 
 // Вес каждой раны в «лёгких ранах»
 function woundWeights() {
-  const hp = HP(), lpm = Math.max(1, Number(hp.lightPerMedium) || 3), mph = Math.max(1, Number(hp.mediumPerHeavy) || 3);
+  const lpm = WOUND_RULES.lightPerMedium, mph = WOUND_RULES.mediumPerHeavy;
   return { light: 1, medium: lpm, heavy: lpm * mph };
 }
-const maxHits = () => woundWeights().heavy * Math.max(1, Number(HP().heavyToDeath) || 4);
+const heavyToDeath = () => Math.max(1, getTotal('heavyToDeath'));
+const maxHits = () => woundWeights().heavy * heavyToDeath();
 const damage = () => { const w = woundWeights(); return WOUND_TYPES.reduce((s, t) => s + HP()[t.key].items.length * w[t.key], 0); };
 const hits = () => maxHits() - damage();
 
@@ -2909,10 +3004,9 @@ function healthPanel() {
         h('span', { class: 'grow' }),
         btn('+ рана', () => takeWound(def.key), 'small', false, 'Получить рану')),
       woundList(def))),
-    fold('health-settings', 'Соотношение ран', h('div', { class: 'row small form' },
-      num(hp, 'lightPerMedium', { min: 1, class: 'lvl-num' }), h('span', { class: 'muted' }, 'лёгких = 1 средняя ·'),
-      num(hp, 'mediumPerHeavy', { min: 1, class: 'lvl-num' }), h('span', { class: 'muted' }, 'средних = 1 тяжёлая ·'),
-      num(hp, 'heavyToDeath', { min: 1, class: 'lvl-num' }), h('span', { class: 'muted' }, 'тяжёлых = смерть'))),
+    h('div', { class: 'small muted', style: 'margin-top:6px' },
+      `${WOUND_RULES.lightPerMedium} лёгкие = 1 средняя · ${WOUND_RULES.mediumPerHeavy} средние = 1 тяжёлая · ${heavyToDeath()} тяжёлых = смерть`,
+      statModifiers('heavyToDeath').length ? h('span', { class: 'plan' }, ` (${WOUND_RULES.heavyToDeath} ${bonusText('heavyToDeath')})`) : null),
     h('div', { class: 'row', style: 'margin-top:8px' },
       btn('Залечить все раны', () => {
         if (!confirm('Убрать все раны вместе с пояснениями?')) return;
@@ -3232,7 +3326,23 @@ function renderQuestsTab(v) {
       sel(f.status, [['', 'все статусы'], ...Object.entries(QUEST_STATUSES)], val => { f.status = val; L.draw(); }),
       h('label', { class: 'chk small' }, h('input', { type: 'checkbox', checked: f.hideFinished,
         onchange: e => { f.hideFinished = e.target.checked; L.draw(); } }), 'скрыть выполненные и проваленные')),
-    L.box);
+    L.box,
+    contractsBlock('active', '📜 Договоры: активные'),
+    contractsBlock('paused', '⏸ Договоры: приостановленные'));
+}
+
+// Все договоры с NPC и группами в нужном статусе: с кем (ссылка) и что за договор
+function contractsBlock(status, title) {
+  const rows = state.npcs.flatMap(n => n.contracts.filter(c => c.status === status).map(c => ({ n, c })))
+    .sort((a, b) => byName(a.n, b.n));
+  return fold('contracts-' + status, `${title} (${rows.length})`, rows.length
+    ? h('div', { class: 'list' }, rows.map(({ n, c }) => h('div', { class: 'card contract-row' },
+        h('div', { class: 'card-head' },
+          h('button', { class: 'chip link' + (isGroup(n) ? ' group-link' : ''), onclick: () => goToNpc(n.id) }, (isGroup(n) ? '👥 ' : '👤 ') + n.name),
+          h('b', { class: 'grow' }, c.title || 'Без названия'),
+          sel(c.status, Object.entries(CONTRACT_STATUSES), val => { c.status = val; commit(); }, 'small')),
+        c.description ? h('div', { class: 'desc small' }, rich(c.description)) : null)))
+    : h('div', { class: 'empty' }, 'Таких договоров нет.'), true, 'section');
 }
 
 function questCard(q) {
@@ -3725,12 +3835,22 @@ const GROUP_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
   '<path d="M8 90c2-16 11-24 22-24s20 8 22 24z" fill="#4a3e33"/><path d="M48 90c2-16 11-24 22-24s20 8 22 24z" fill="#4a3e33"/>' +
   '<circle cx="50" cy="36" r="13" fill="#5a4a38"/><path d="M24 92c3-19 13-28 26-28s23 9 26 28z" fill="#5a4a38"/></svg>');
 
+// «Свернуть всё»: закрыть редакторы, раскрытые карточки и свёртываемые блоки вкладки
+function collapseAll(ids, folds = [], extra) {
+  for (const id of ids) { ui.editing.delete(id); ui.npcExpanded.delete(id); }
+  for (const k of Object.keys(ui.open)) if (folds.some(f => k === f || k.startsWith(f))) ui.open[k] = false;
+  for (const f of folds) if (!f.endsWith('-')) ui.open[f] = false;
+  extra?.();
+  render();
+}
+const collapseBtn = (ids, folds, extra) => btn('⇱ Свернуть всё', () => collapseAll(ids, folds, extra), 'ghost small', false, 'Закрыть все раскрытые карточки и блоки');
+
 function newNpc(kind, name) {
   return { id: uid('npc'), kind, name: name || (kind === 'group' ? 'Новая группа' : 'Новый NPC'), image: '', short: '',
     status: [], faction: [], location: [], contracts: [], relations: [], notes: '' };
 }
 function addNpc(kind, name) {
-  const n = newNpc(kind, name);
+  const n = newNpc(kind, name || nameFromSearch('npc', ''));
   state.npcs.push(n);
   ui.editing.add(n.id);
   ui.npcExpanded.add(n.id);
@@ -3755,6 +3875,7 @@ function renderNpcTab(v) {
     key: 'npc', placeholder: 'Поиск по имени…', wrapCls: 'npc-grid',
     items: () => state.npcs.filter(n =>
       (!ui.filters.npcKind || (n.kind || 'person') === ui.filters.npcKind) &&
+      (!ui.filters.npcContracts || n.contracts.some(c => ui.filters.npcContracts === 'any' || c.status === ui.filters.npcContracts)) &&
       NPC_TAG_FIELDS.every(k => !f[k] || toTags(n[k]).includes(f[k]) || (k === 'faction' && isGroup(n) && sameText(n.name, f[k]))))
       .sort((a, b) => (isGroup(b) - isGroup(a)) || byName(a, b)),
     filter: (n, q) => has(q, ...allNames(n)), renderItem: npcCard, empty: 'Карточек пока нет.',
@@ -3776,9 +3897,13 @@ function renderNpcTab(v) {
       btn('+ Персона', () => addNpc('person'), 'primary'),
       btn('+ Группа', () => addNpc('group'), 'primary'),
       dup.button,
+      collapseBtn(state.npcs.map(n => n.id)),
       L.input,
       sel(kind, [['', 'все карточки'], ['person', 'только персоны'], ['group', 'только группы']], val => { ui.filters.npcKind = val; L.draw(); }),
-      filterSel('faction', 'все фракции'), filterSel('status', 'все статусы'), filterSel('location', 'все места')),
+      filterSel('faction', 'все фракции'), filterSel('status', 'все статусы'), filterSel('location', 'все места'),
+      sel(ui.filters.npcContracts || '', [['', 'договоры: все карточки'], ['any', '📜 только с договорами'],
+        ...Object.entries(CONTRACT_STATUSES).map(([k, v]) => [k, '📜 договор: ' + v.toLowerCase()])],
+        val => { ui.filters.npcContracts = val; L.draw(); })),
     orphan.length ? h('div', { class: 'small muted orphan-row' }, 'Фракции без своей карточки: ',
       orphan.map(name => h('span', { class: 'chip tag' }, '⚑ ' + name,
         h('button', { type: 'button', class: 'x add', title: 'Создать карточку группы', onclick: () => addNpc('group', name) }, '+')))) : null,
@@ -4276,6 +4401,26 @@ function territoryLayer(nodes, k) {
   return { layer: sv('g', { class: 'territories' }, defs, fills, hatches, borders), legend, disputed: hatches.length > 0 };
 }
 
+// Новые случайные цвета всем странам, у которых есть земли на карте (на любом уровне)
+function hslHex(hue, sat, light) {
+  const a = sat * Math.min(light, 1 - light);
+  const f = n => { const k = (n + hue / 30) % 12; return Math.round(255 * (light - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, '0'); };
+  return '#' + f(0) + f(8) + f(4);
+}
+function recolorCountries() {
+  const countries = [...new Map(GEO().locations.map(l => ownerOf(l).group).filter(Boolean).map(g => [g.id, g])).values()];
+  if (!countries.length) { toast('На карте пока нет стран — укажи у локаций, какой стране они принадлежат'); return; }
+  if (!confirm(`Заменить цвета ${countries.length} стран на случайные?`)) return;
+  // оттенки равномерно по кругу со случайным сдвигом, чтобы соседние цвета не сливались
+  const start = Math.random() * 360, order = countries.slice().sort(() => Math.random() - 0.5);
+  order.forEach((g, i) => {
+    const hue = (start + i * 360 / order.length + (Math.random() - 0.5) * 12) % 360;
+    g.color = hslHex(hue, 0.5 + Math.random() * 0.2, 0.5 + Math.random() * 0.1);
+  });
+  commit();
+  toast('Страны перекрашены', 'ok');
+}
+
 function geoLegend(t) {
   const countries = t.legend.filter(Boolean);
   if (!countries.length && !t.disputed) return null;
@@ -4376,7 +4521,9 @@ function geoGraph() {
 function addLocation() {
   const g = ui.geo;
   const parentId = g.mode === 'level' ? g.scope : (g.selected || null);
-  const l = { id: uid('loc'), name: 'Новая локация', type: '', parentId, description: '', notes: '', pos: {} };
+  const fromMap = (ui.geoSearch || '').trim();
+  ui.geoSearch = '';
+  const l = { id: uid('loc'), name: fromMap || nameFromSearch('geo', 'Новая локация'), type: '', parentId, description: '', notes: '', pos: {} };
   ui.focusName = l.id;
   GEO().locations.push(l);
   g.selected = l.id;
@@ -4413,7 +4560,9 @@ function renderGeoTab(v) {
         ensureLayout(nodes, graphEdges(nodes), true);
         commit();
       }, 'ghost small', !graphNodes().length),
-      dup.button),
+      btn('🎨 Перекрасить страны', recolorCountries, 'ghost small', false, 'Случайные цвета всем странам на карте'),
+      dup.button,
+      collapseBtn(GEO().locations.map(l => l.id), ['geo-all', 'geo-types'], () => { ui.geo.selected = null; })),
     dup.view ? h('section', { class: 'panel' }, h('div', { class: 'panel-title' }, 'Возможные дубли локаций'), dup.view) : null,
     g.mode === 'level' ? h('div', { class: 'crumbs' }, crumbs) : null,
     h('div', { class: 'panel geo-panel' },
@@ -4534,8 +4683,21 @@ function openHelp(id) {
 const code = t => h('code', null, t);
 const HELP_SECTIONS = [
   {
+    id: 'transform', title: 'Превращения и стоимость стихийных заклинаний',
+    body: () => [
+      h('p', null, h('b', null, 'Из чего состоит заклинание: '), 'стихия + ступень стихии (со всеми её аффиксами) + форма (со всеми её аффиксами) + свободные аффиксы. ',
+        'Сколько ячеек свободных аффиксов — зависит от дисциплин и предметов (первую даёт «Магическая теория»).'),
+      h('p', null, h('b', null, 'Превращение: '), 'если аффиксы формы и свободные аффиксы закрывают требования ступени, которая растёт из текущей, ',
+        'стихия превращается в эту ступень — только для этого заклинания. Потраченные аффиксы становятся «—» и заново не заполняются; ',
+        'аффиксы самой стихии в требования не засчитываются. Схемы ступеней — по «?» у каждой стихии.'),
+      h('p', null, h('b', null, 'Стоимость маны'), ' = число всех аффиксов (кроме потраченных) × множитель итоговой ступени (после превращения). ',
+        'Множитель у каждой ступени свой и указан в её строке.'),
+    ],
+  },
+  {
     id: 'combos', title: 'Комбо — связка заклинаний',
     body: () => [
+      h('p', null, h('b', null, 'Доступ.'), ' Раздел открыт, пока действует эффект «Открывает комбо» — у используемого предмета или у достигнутого уровня дисциплины. Без него комбо скрыты, но не удаляются.'),
       h('p', null, 'Комбо — несколько заклинаний, применяемых подряд ради общего эффекта. В связку можно брать заклинания из книги (стихийные) и из тайной школы, сколько угодно и в любом порядке.'),
       h('p', null, h('b', null, 'Стоимость'), ' комбо — сумма стоимостей всех шагов. Она пересчитывается сама: если у стихийного заклинания поменялась цена (например, после превращения), комбо подхватит новую.'),
       h('p', null, h('b', null, 'Применить комбо'), ' списывает всю сумму сразу. Если маны не хватает — не происходит ничего. Счётчики использований растут и у комбо, и у каждого заклинания в нём.'),
