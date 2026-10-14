@@ -62,6 +62,20 @@ button,input,select,textarea{font:inherit;color:inherit}
 .props-table{border-collapse:collapse;font-size:13.5px}
 .props-table th,.props-table td{border-bottom:1px solid var(--line);padding:3px 8px;text-align:left;white-space:nowrap}
 .props-table .row-name{color:var(--text)}
+.update-banner{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#22301f;border:1px solid #4f7a45;border-radius:var(--radius);padding:8px 12px;margin-bottom:14px}
+.changelog ul,.changelog ol{margin:4px 0 8px;padding-left:22px}
+.changelog li{margin:2px 0}
+.changelog-todo{border-left:3px solid var(--gold);padding-left:10px;margin-top:8px}
+.card,.npc{position:relative}
+.card .card-head>.edit-btn,.npc .card-head>.edit-btn{position:absolute;top:8px;right:8px;z-index:1;margin:0}
+.card .card-head:has(>.edit-btn),.npc .card-head:has(>.edit-btn){padding-right:42px}
+.card .card-head:has(>.edit-btn.primary),.npc .card-head:has(>.edit-btn.primary){padding-right:104px}
+.btn.unpin{padding:0 5px;min-width:0;margin-left:2px}
+.search-bottom-row{margin-top:10px}
+.table-wrap{max-height:75vh;overflow:auto}
+.props-table thead th{position:sticky;top:0;z-index:2;background:var(--panel)}
+.props-table th.row-name{position:sticky;left:0;z-index:1;background:var(--panel);font-weight:normal}
+.props-table thead th.corner{left:0;z-index:3}
 .src-input{max-width:340px;padding:3px 8px;font-size:13px}
 .cost.ex-cost{color:#c9a6e8}
 .cost.stat-cost{color:#e8a6a6}
@@ -563,7 +577,7 @@ details.fold.section{margin:6px 0 14px}
 /* =====================================================================
    STATE — константы, справочники, состояние по умолчанию
    ===================================================================== */
-const APP_VERSION = 13;
+const APP_VERSION = 14;
 const STORAGE_KEY = 'gleb-mages-rpg-state';
 const BACKUP_KEY = 'gleb-mages-rpg-backups';
 const FILE_PREFIX = 'gleb-mages-rpg';
@@ -593,8 +607,8 @@ const STAT_DEFS = [
   { key: 'magicPower', name: 'Сила магии', allocatable: true, thresholds: true },
   { key: 'magicDefense', name: 'Защита от магии', allocatable: true, thresholds: true },
   { key: 'magicSense', name: 'Чувство магии', allocatable: true, thresholds: true },
-  // Запас открывается, когда одна из трёх характеристик дошла до максимума; без потолка; прикрывает траты характеристик
-  { key: 'reserve', name: 'Запас', allocatable: true, noMax: true },
+  // Потенциал открывается, когда одна из трёх характеристик дошла до максимума; без потолка; прикрывает траты характеристик
+  { key: 'reserve', name: 'Потенциал', allocatable: true, noMax: true },
   { key: 'heavyToDeath', name: 'Тяжёлых ран до смерти', short: 'Тяжёлых ран до смерти',
     get: () => WOUND_RULES.heavyToDeath, set: () => {} },
   { key: 'freeSlots', name: 'Ячеек свободного аффикса', short: 'Ячеек свободного аффикса',
@@ -743,7 +757,7 @@ const FORM_SEED = [
   {"n":"Коса","d":"Довольно крупный всплеск энергии, не летящий далеко вперёд, а следующий за движением руки.","a":["Острота","Ускорение"]},
   {"n":"Истукан","d":"Грубое изваяние гуманоида.","a":["Заряд","Управление"]},
   {"n":"Конус","d":"Направленная веером стихия от мага в сторону.","a":["Рост"]},
-  {"n":"Луч","d":"Направленная вдаль прямой линией энергия от мага к цели.","a":["Ускорение"]},
+  {"n":"Луч","aka":["Лучь"],"d":"Направленная вдаль прямой линией энергия от мага к цели.","a":["Ускорение"]},
 ];
 
 // Описания аффиксов по умолчанию
@@ -759,6 +773,74 @@ const EXTRA_AFFIXES = ['Живой', 'Поиск', 'Разделение', 'Ра
 const ARCANE_SCHOOLS = [['teleport', 'Телепортация'], ['transform', 'Трансформация'], ['creation', 'Созидание'], ['negation', 'Отрицание'], ['mind', 'Разум']];
 // n — название, aka — старые написания (для узнавания в сохранениях), lvl — уровень, cost — мана, ex — истощение,
 // st — постоянная трата характеристик { magicPower: n, … }, tags — метки, x — примечание мастера, d — описание
+// «Что нового» — по одной записи на выкладку, новые сверху. v — номер версии ГГГГММДДЧЧММ.
+// sections: [{ h: 'Персонаж', items: ['текст', …] }], todo: ['что сделать после обновления', …]. **жирный** поддерживается.
+const CHANGELOG = [
+  {
+    "v": "202610142242",
+    "sections": [
+      {
+        "h": "Персонаж",
+        "items": [
+          "**Истощение** — строка «💤 Истощение» под ранами и «💤 N +» в верхней полоске. Каждое истощение отнимает 3 хита, как средняя рана. «😴 Выспаться» сбрасывает его, раны остаются. Если истощение убьёт персонажа, лист сначала спросит.",
+          "**Броня** — новый блок между хитами и золотом, потраченные ячейки отмечаются галочками (с округлением вверх). Магическая считается сама: 1 ячейка на каждые 100 Защиты от магии плюс магические предметы. Физическая — от надетых предметов. Временная — от заклинаний с Поглощением.",
+          "**Характеристики:** максимум каждой — 500, кнопки ±10 и ±100, поля «база» больше нет, на максимуме следующий порог не показывается.",
+          "**Потенциал** — четвёртая характеристика. Открывается навсегда, когда одна из трёх дошла до 500. Пополняется свободными очками без максимума и первым прикрывает траты характеристик.",
+          "**Визитка** — поле «Игрок» и кнопка «📇 Сохранить визитку» в профиле: файл для других игроков, у них твой персонаж появится в NPC."
+        ]
+      },
+      {
+        "h": "Магия",
+        "items": [
+          "**Тайные школы:** Телепортация, Трансформация, Созидание, Отрицание, Разум. Отметь свои в блоке «Мои тайные школы». У заклинания есть «Школа», «Примечание» и метки.",
+          "**Обмен тайными заклинаниями:** «⬇ Экспорт» у заклинания сохраняет его в файл (без твоих заметок), «⬆ Загрузить заклинание» добавляет из файла.",
+          "**Стоимость заклинаний:** кроме маны — истощение и характеристики (Сила, Защита, Чувство магии). Трата характеристик постоянная, сначала из Потенциала; перед списанием лист спрашивает. У комбо всё суммируется.",
+          "**«✦ Применить» в конструкторе** книги — применить собранное заклинание сразу, не сохраняя.",
+          "**Формы — общий список мастера:** 21 форма плюс Барьер. У общих форм меняются только «изучена» и источник. Новое поле «Предыдущая форма» (Стрела → Копьё, Покров → Доспех → Аватар…). Свои формы можно добавлять.",
+          "**Свойства заклинаний:** Область, Дальность, Урон, Защита, Поглощение, Снаряды. Числа — у ступеней (раздел «Свойства заклинаний»), галочки — у форм, прибавки («50%») и множители («×2») — у аффиксов. Значение видно в конструкторе, книге и непроверенных комбинациях; можно поставить «своё».",
+          "**Временная броня:** заклинание с Поглощением создаёт её при применении — Земля даёт физическую, остальные стихии — магическую.",
+          "**Новые аффиксы:** Живой, Поиск, Разделение, Разлагающий, Раскалённый, Мягкий, Размытие, Токсичный."
+        ]
+      },
+      {
+        "h": "Мир",
+        "items": [
+          "**Летопись:** форма новой записи — по кнопке «+ Новая запись».",
+          "**Ссылки в текстах:** заклинания, предметы и имя своего персонажа, с падежами («применила Ледяную стрелу»).",
+          "**NPC:** вид «🧙 Персонаж игрока» и кнопка «📇 Загрузить визитку». Свой персонаж в списке не показывается."
+        ]
+      },
+      {
+        "h": "Тело",
+        "items": [
+          "**Предметы:** блок «Броня» — вид, Защита и Поглощение; действует, пока предмет используется.",
+          "**Боевое искусство:** раздел «Механика защиты»."
+        ]
+      },
+      {
+        "h": "Удобство и справка",
+        "items": [
+          "Кнопка ✎ / «✓ Готово» всегда в правом верхнем углу карточки.",
+          "В длинных списках (и в летописи) поле поиска есть и внизу.",
+          "Новые разделы справки: «Визитка и персонажи других игроков», «Похожие карточки (дубли) и как их объединить».",
+          "Блок «Что нового» во вкладке «Данные» — этот."
+        ]
+      },
+      {
+        "h": "Для мастера",
+        "items": [
+          "**Режим мастера** — адрес …/index.html?master=true: общие формы, свойства (порядок — стрелками) и закреплённые значения (🔒). «Выгрузить правила» сохраняет правки в файл."
+        ]
+      }
+    ],
+    "todo": [
+      "Отметь свою школу: «Тайная → Мои тайные школы».",
+      "Проставь школу своим тайным заклинаниям (✎ → «Школа»).",
+      "Формы с названиями из списка мастера стали общими: описание и аффиксы теперь его. Отметка «изучена» и источник сохранились."
+    ]
+  },
+];
+
 // Свойства заклинаний — справочник мастера. coef — коэффициент свойства (пока у всех 1).
 const PROP_SEED = [
   { id: 'area', n: 'Область', coef: 1 },
@@ -766,15 +848,21 @@ const PROP_SEED = [
   { id: 'damage', n: 'Урон', coef: 1 },
   { id: 'defense', n: 'Защита', coef: 1 },
   { id: 'absorb', n: 'Поглощение', coef: 1 },
+  { id: 'shots', n: 'Снаряды', coef: 1 },
 ];
 // Значения, закреплённые мастером (у всех одинаковые, 🔒). Незакреплённые игрок заполняет сам.
 // Ступени: «стихия|ступень» → { свойство: число }; у форм — в FORM_SEED (p: { свойство: true/false });
 // аффиксы: «название» → { свойство: '50%' }; тайные школы: id → { свойство: число } (на будущее).
 const STAGE_PROPS = {};
-const AFFIX_PROPS = {};
+// значение «×2» — множитель (перемножается), «50%» / «0.5» — прибавка (складывается)
+const AFFIX_PROPS = {
+  'Умножение': { shots: '×2' },
+};
 const SCHOOL_PROPS = {};
 
-const ARCANE_SEED = [
+// ВРЕМЕННО: прежний список заклинаний школы Трансформации. Нужен только обновлению 13 → 14
+// (изученные превращаются в свои с полным текстом). Через одну выкладку — убрать вместе с текстами в миграции 13.
+const LEGACY_TRANSFORM = [
   {"school":"transform","n":"Двойник","lvl":"Фундаментальный","cost":100,"tags":["Истощение","Трансформация","Клон"],"d":"Создание дубликата, максимум 1 дубликат. Он делит с магом один разум.\nОбычно создание клона доступно 1 раз в (день).\nПовторное использование за короткий срок даёт 3 единицы истощения."},
   {"school":"transform","n":"Мутация (касание)","lvl":"Повышенная","cost":80,"tags":["Мутация"],"x":"Ранее запретная техника. Заставляет кидать кубики за каждую опухоль.","d":"Боевая техника создаёт мутацию при касании рукой или органическим оружием.\nМутация — это эффект, который поражает плоть атакованного. На базовом уровне требует касания тела цели напрямую или через органического посредника, например меча из железного дерева.\nЭффект мутации чаще всего отрицательный — опухоль.\nОпухоль занимает здоровье цели: малая = лёгкое ранение, средняя = среднее ранение, обширная = тяжёлое ранение.\nОбладатель опухоли кидает кубики каждый ход, по кубику за каждую опухоль:\n6 — опухоль уменьшается;\n5 — опухоль стагнирует;\n4 — опухоль болит (может сбить концентрацию);\n3 — опухоль мутирует (накладывает 1 истощение);\n2 — опухоль делится (снижает ранг и делится на 2 опухоли меньше; если делиться некуда, то просто удваивается);\n1 — опухоль растёт (повышает ранг)."},
   {"school":"transform","n":"Аспект краба — клешня","aka":["Аспект краба - Клешня"],"lvl":"Ученик","cost":60,"tags":["Преображение"],"x":"Уязвимость к огню, краснеет.","d":"Маг выращивает себе мощную клешню на руке. Клешня покрыта панцирем и может блокировать многие атаки. Повышает защиту обладателя от физического урона и позволяет применять клешню.\nКлешня вдвое длиннее руки человека.\nОчень сильное сжатие.\nПолученный клешнёй урон не передаётся магу."},
@@ -1016,6 +1104,21 @@ const MIGRATIONS = {
     s.version = 10;
     return s;
   },
+  // v13 → v14: заклинания школ больше не хранятся в HTML. Неизученные записи прежнего списка убираются,
+  // изученные становятся своими заклинаниями с полным текстом.
+  13: s => {
+    s.arcaneSpells = (s.arcaneSpells || []).filter(sp => {
+      if (!('learned' in sp)) return true;            // своё заклинание — не трогаем
+      if (!sp.learned) return false;                  // запись списка школы, не изученная — убираем
+      const sd = LEGACY_TRANSFORM.find(x => [x.n, ...(x.aka || [])].some(n => normName(n) === normName(sp.name)));
+      if (sd) Object.assign(sp, { school: sd.school, level: sd.lvl || '', manaCost: sd.cost || 0, exhaustCost: sd.ex || 0,
+        statCost: { ...(sd.st || {}) }, description: sd.d || '', extra: sd.x || '', tags: sd.tags || [] });
+      delete sp.learned; delete sp.sys;
+      return true;
+    });
+    s.version = 14;
+    return s;
+  },
   // v12 → v13: аффикс снова называется «Ласковый» (если были «Пацифизм» и «Ласковый» — сливаются в один)
   12: s => {
     const affs = s.elementalMagic?.affixes || [];
@@ -1039,7 +1142,7 @@ const MIGRATIONS = {
     const open = (s.character.arcaneSchools ||= []);
     for (const sp of s.arcaneSpells || []) {
       if (!sp.learned) continue;
-      const sd = ARCANE_SEED.find(x => [x.n, ...(x.aka || [])].some(n => normName(n) === normName(sp.name)));
+      const sd = LEGACY_TRANSFORM.find(x => [x.n, ...(x.aka || [])].some(n => normName(n) === normName(sp.name)));
       if (sd && !open.includes(sd.school)) open.push(sd.school);
     }
     s.version = 12;
@@ -1139,13 +1242,28 @@ function ensureSeedAffixes(s) {
 // Формы из FORM_SEED: описание, предыдущая форма и аффиксы — из страницы; от сохранения — id, «изучена», источник.
 // Старые названия вида «Копье Продвинутая форма стрелы» узнаются по первой части.
 const formKey = n => normName(n).replace(/ (продвинутая|высшая) форма.*$/, '');
+// Заменить во всём объекте строку-идентификатор (id уникальны, поэтому безопасно)
+function deepReplace(o, from, to) {
+  if (Array.isArray(o)) { o.forEach((v, i) => { if (v === from) o[i] = to; else if (v && typeof v === 'object') deepReplace(v, from, to); }); return; }
+  for (const k in o) { const v = o[k]; if (v === from) o[k] = to; else if (v && typeof v === 'object') deepReplace(v, from, to); }
+}
 function syncFormsFromSeed(s) {
   const em = s.elementalMagic;
   const byKey = new Map();
   for (const f of em.forms) if (!byKey.has(formKey(f.name))) byKey.set(formKey(f.name), f);
   const idByName = {}, seeded = [];
   for (const sd of FORM_SEED) {
-    let f = byKey.get(formKey(sd.n));
+    // все карточки этой формы: по названию и старым написаниям (Луч, Лучь…). Лишние сливаются в первую.
+    const keys = [sd.n, ...(sd.aka || [])].map(formKey);
+    const same = em.forms.filter(x => keys.includes(formKey(x.name)));
+    let f = same[0];
+    for (const dup of same.slice(1)) {
+      f.known = f.known || dup.known;
+      f.source ||= dup.source;
+      f.props = { ...(dup.props || {}), ...(f.props || {}) };
+      deepReplace(s, dup.id, f.id);
+      em.forms = em.forms.filter(x => x !== dup);
+    }
     if (!f) { f = { id: uid('form'), known: false, source: '' }; em.forms.push(f); }
     Object.assign(f, { name: sd.n, description: sd.d || '', sys: true });
     idByName[sd.n] = f.id;
@@ -1160,26 +1278,6 @@ function syncFormsFromSeed(s) {
   em.forms = [...seeded, ...own];
 }
 
-// Тайные заклинания школ из ARCANE_SEED; от сохранения — id, «изучено», счётчик, заметки, картинка
-function syncArcaneFromSeed(s) {
-  const list = s.arcaneSpells, taken = new Set();
-  for (const sd of ARCANE_SEED) {
-    const keys = [sd.n, ...(sd.aka || [])].map(normName);
-    let sp = list.find(x => !taken.has(x.id) && keys.includes(normName(x.name)));
-    if (!sp) { sp = { id: uid('arc'), learned: false, uses: 0, notes: '', image: '' }; list.push(sp); }
-    else if (!('learned' in sp)) {
-      // было своим заклинанием с таким же названием — значит, изучено; заметки-метки мастера не дублируем
-      sp.learned = true;
-      if (!s.character.arcaneSchools.includes(sd.school)) s.character.arcaneSchools.push(sd.school);
-      if (normName(sp.notes).replace(/,/g, '') === normName((sd.tags || []).join(' '))) sp.notes = '';
-    }
-    taken.add(sp.id);
-    Object.assign(sp, { sys: true, name: sd.n, school: sd.school, level: sd.lvl || '', manaCost: sd.cost || 0, exhaustCost: sd.ex || 0, statCost: { ...(sd.st || {}) },
-      description: sd.d || '', extra: sd.x || '', tags: sd.tags || [] });
-  }
-  for (const sp of list) if (!taken.has(sp.id)) { delete sp.sys; delete sp.extra; delete sp.learned; sp.school ??= ''; }
-}
-
 function normalize(s) {
   const d = defaultState();
   // ранения из старого формата (только число) — до fillMissing, иначе подставится пустой список
@@ -1192,7 +1290,6 @@ function normalize(s) {
   syncStagesFromSeed(s);
   syncFormsFromSeed(s);
   ensureSeedAffixes(s);
-  syncArcaneFromSeed(s);
   const em = s.elementalMagic;
   for (const de of d.elementalMagic.elements)
     if (!em.elements.some(e => e.id === de.id)) em.elements.push({ ...de, stages: [] });
@@ -1264,10 +1361,7 @@ function serializeState(pretty) {
     // общие формы: только «изучена» и источник
     forms: em.forms.map(f => f.sys ? { id: f.id, name: f.name, known: !!f.known, source: f.source || '', props: f.props || {} } : f),
     // связи «аффикс — ступень» и «аффикс — общая форма» тоже из правил: при открытии собираются заново
-    affixes: em.affixes.map(a => ({ ...a, links: (a.links || []).filter(l => l.type !== 'stage' && !(l.type === 'form' && sysForms.has(l.targetId))) })) },
-    // заклинания школ: только личные отметки
-    arcaneSpells: state.arcaneSpells.map(sp => sp.sys
-      ? { id: sp.id, name: sp.name, learned: !!sp.learned, uses: sp.uses || 0, notes: sp.notes || '', image: sp.image || '' } : sp) };
+    affixes: em.affixes.map(a => ({ ...a, links: (a.links || []).filter(l => l.type !== 'stage' && !(l.type === 'form' && sysForms.has(l.targetId))) })) } };
   return pretty ? JSON.stringify(slim, null, 2) : JSON.stringify(slim);
 }
 
@@ -1371,7 +1465,7 @@ function cardInput() {
       importCard(d);
     });
   } });
-  return [btn('🪪 Загрузить визитку', () => input.click(), '', false, 'Файл-визитка другого игрока: его персонаж появится здесь'), input];
+  return [btn('📇 Загрузить визитку', () => input.click(), '', false, 'Файл-визитка другого игрока: его персонаж появится здесь'), input];
 }
 
 function importJSONFile(file) {
@@ -1457,7 +1551,7 @@ function adjGold(d) {
 }
 
 const capOf = key => statDef(key)?.noMax ? Infinity : STAT_MAX;
-// Запас открывается навсегда, как только одна из характеристик дошла до максимума (траты потом его не закрывают)
+// Потенциал открывается навсегда, как только одна из характеристик дошла до максимума (траты потом его не закрывают)
 function reserveOpen() {
   const c = state.character;
   if (!c.reserveOpened && MANA_STATS.some(k => getBase(k) >= STAT_MAX)) c.reserveOpened = true;
@@ -1829,7 +1923,7 @@ const statCostText = st => Object.entries(st).map(([k, v]) => `${v} ${STAT_SHORT
 const castLabel = (cost, ex, icon = '✦ Применить', st = {}) =>
   `${icon} (−${cost}${ex ? ' · +' + ex + ' 💤' : ''}${Object.keys(st).length ? ' · −' + statCostText(st) : ''})`;
 const exChip = ex => ex ? h('span', { class: 'cost ex-cost', title: 'Истощение за применение' }, '💤 ' + ex) : null;
-const statChips = st => Object.entries(st).map(([k, v]) => h('span', { class: 'cost stat-cost', title: 'Постоянная трата характеристики (сначала из Запаса)' }, `−${v} ${STAT_SHORT[k]}`));
+const statChips = st => Object.entries(st).map(([k, v]) => h('span', { class: 'cost stat-cost', title: 'Постоянная трата характеристики (сначала из Потенциала)' }, `−${v} ${STAT_SHORT[k]}`));
 
 // Строка «кроме маны тратит»: истощение и характеристики — в конструкторе, книге и тайной магии
 function extraCostRow(obj, onChange = commit) {
@@ -1837,11 +1931,11 @@ function extraCostRow(obj, onChange = commit) {
   return h('div', { class: 'row small extra-cost' },
     h('span', { class: 'muted' }, 'Кроме маны тратит:'),
     h('label', { class: 'chk', title: 'Истощение за каждое применение' }, '💤 истощение', num(obj, 'exhaustCost', { min: 0, class: 'lvl-num', onChange })),
-    MANA_STATS.map(k => h('label', { class: 'chk', title: 'Постоянная трата: сначала из Запаса, потом из самой характеристики' },
+    MANA_STATS.map(k => h('label', { class: 'chk', title: 'Постоянная трата: сначала из Потенциала, потом из самой характеристики' },
       statDef(k).name, num(obj.statCost, k, { min: 0, class: 'lvl-num', onChange }))));
 }
 
-// Как заплатить характеристиками: сначала Запас (прежде всего там, где самой характеристики не хватает). null — не хватает.
+// Как заплатить характеристиками: сначала Потенциал (прежде всего там, где самой характеристики не хватает). null — не хватает.
 function statPayment(need) {
   const res = { reserve: 0, stats: {} };
   let left = getBase('reserve');
@@ -1860,10 +1954,10 @@ function payCost(name, mana, ex, st) {
   const m = state.character.mana;
   if (m.current < mana) { toast('Недостаточно маны', 'error'); return false; }
   const pay = statPayment(st);
-  if (!pay) { toast('Не хватает характеристик (с учётом Запаса)', 'error'); return false; }
+  if (!pay) { toast('Не хватает характеристик (с учётом Потенциала)', 'error'); return false; }
   if (!confirmDeadlyExhaustion(ex)) return false;
   if (Object.keys(st).length && !confirm(`«${name}» навсегда тратит: ${statCostText(st)}.` +
-    (pay.reserve ? `\nИз Запаса: ${pay.reserve}` + (Object.values(pay.stats).some(v => v) ? `, из характеристик: ${statCostText(Object.fromEntries(Object.entries(pay.stats).filter(([, v]) => v)))}` : '') + '.' : '') +
+    (pay.reserve ? `\nИз Потенциала: ${pay.reserve}` + (Object.values(pay.stats).some(v => v) ? `, из характеристик: ${statCostText(Object.fromEntries(Object.entries(pay.stats).filter(([, v]) => v)))}` : '') + '.' : '') +
     '\nПрименить?')) return false;
   m.current -= mana;
   for (const [k, v] of Object.entries(pay.stats)) if (v) setBase(k, getBase(k) - v);
@@ -1885,6 +1979,21 @@ function parseFrac(raw) {
   if (!t) return null;
   const pct = t.endsWith('%'), n = Number(pct ? t.slice(0, -1) : t);
   return isFinite(n) ? (pct ? n / 100 : n) : NaN;
+}
+// Множитель аффикса: «×2», «x2», «х2», «*2» → 2; иначе null (тогда это прибавка в процентах)
+function parseMul(raw) {
+  const t = String(raw ?? '').trim().replace(/\s+/g, '').replace(',', '.');
+  const m = t.match(/^[×xх*](.+)$/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return isFinite(n) ? n : NaN;
+}
+// Как понят ввод аффикса: «×2» или «+50%»; null — пусто; ⚠ — не число
+function affixValText(raw) {
+  const m = parseMul(raw);
+  if (m != null) return isFinite(m) ? '×' + round2(m) : null;
+  const v = parseFrac(raw);
+  return v == null ? '' : isFinite(v) ? fmtPct(v) : null;
 }
 const fmtPct = f => (f >= 0 ? '+' : '−') + round2(Math.abs(f) * 100) + '%';
 function parseNumOrNull(raw) {
@@ -1917,19 +2026,25 @@ function spellPropsCalc(obj) {
   if (!r || !f) return [];
   const affs = [...elementAffixesOf(obj), ...formAffixesOf(obj), ...freeKeys().map(k => obj[k]).filter(Boolean)];
   return PROPS().filter(p => formHasProp(f, p.id) && isNum(stageProp(r.el, r.st, p.id))).map(p => {
-    let sum = 0;
+    let sum = 0, mul = 1;
     const parts = [];
     for (const id of affs) {
-      const a = findAffix(id), v = a ? parseFrac(affixPropRaw(a, p.id)) : null;
+      const a = findAffix(id);
+      if (!a) continue;
+      const raw = affixPropRaw(a, p.id), m = parseMul(raw);
+      if (m != null) { if (isFinite(m)) { mul *= m; parts.push({ name: a.name, m }); } continue; }
+      const v = parseFrac(raw);
       if (v != null && isFinite(v)) { sum += v; parts.push({ name: a.name, v }); }
     }
     const base = stageProp(r.el, r.st, p.id), coef = Number(p.coef ?? 1);
-    const value = round2(base * coef * (1 + sum));
+    // число ступени × коэффициент × (100% + прибавки) × множители
+    const value = round2(base * coef * (1 + sum) * mul);
     const manual = isNum(obj.propManual?.[p.id]) ? obj.propManual[p.id] : null;
     return { p, base, coef, sum, parts, value, negative: sum < -1, manual, shown: manual ?? value };
   });
 }
-const propTip = r => `${r.base} × ${r.coef} × (100%${r.parts.map(x => ' ' + fmtPct(x.v) + ' ' + x.name).join('')}) = ${r.value}` +
+const propTip = r => `${r.base} × ${r.coef} × (100%${r.parts.filter(x => x.v != null).map(x => ' ' + fmtPct(x.v) + ' ' + x.name).join('')})` +
+  r.parts.filter(x => x.m != null).map(x => ` × ${x.m} ${x.name}`).join('') + ` = ${r.value}` +
   (r.manual != null ? `\nСвоё значение: ${r.manual}` : '') + (r.negative ? '\n⚠ Сумма процентов меньше −100%' : '');
 // Свойства в заклинании: просмотр или (editable) с «своим» значением
 // Ячейка числа: закреплённое мастером — 🔒 (правит только мастер); иначе — своё значение
@@ -1939,14 +2054,16 @@ function propNumCell(sysVal, userVal, onUser, onSys) {
   return h('input', { class: 'prop-in' + (ui.master ? ' master' : ''), inputmode: 'decimal',
     value: ui.master ? (sysVal ?? '') : (userVal ?? ''), placeholder: ui.master && isNum(userVal) ? String(userVal) : '—',
     title: ui.master ? 'Режим мастера: закрепить значение для всех. Пусто — снять закрепление' : 'Своё значение (пока мастер не закрепил)',
-    onchange: e => { const v = parseNumOrNull(e.target.value); if (v !== undefined) (ui.master ? onSys : onUser)(v); } });
+    // браузер может прислать «изменено» второй раз (после Enter) — то же значение не сохраняем повторно
+    onchange: e => { if (e.target.dataset.orig === e.target.value) return; e.target.dataset.orig = e.target.value;
+      const v = parseNumOrNull(e.target.value); if (v !== undefined) (ui.master ? onSys : onUser)(v); } });
 }
 function propBoolCell(sysVal, userVal, onUser, onSys) {
   const locked = typeof sysVal === 'boolean';
   if (locked && !ui.master) return h('input', { type: 'checkbox', checked: sysVal, disabled: true, title: 'Закреплено правилами мастера' });
   if (ui.master) return [h('input', { type: 'checkbox', class: 'master', checked: locked ? sysVal : !!userVal,
       title: 'Режим мастера: закрепить для всех', onchange: e => onSys(e.target.checked) }),
-    locked ? h('button', { type: 'button', class: 'x', title: 'Снять закрепление', onclick: () => onSys(null) }, '↺') : null];
+    locked ? h('button', { type: 'button', class: 'btn ghost small sq unpin', title: 'Снять закрепление (снова решает игрок)', onclick: e => { e.preventDefault(); onSys(null); } }, '↺') : null];
   return h('input', { type: 'checkbox', checked: !!userVal, onchange: e => onUser(e.target.checked) });
 }
 // Галочки «свойство имеет смысл у формы»
@@ -1963,16 +2080,16 @@ function formPropsRow(f) {
 function affixPropChips(a) {
   const list = PROPS().map(p => ({ p, raw: affixPropRaw(a, p.id) })).filter(x => x.raw != null && String(x.raw).trim() !== '');
   return list.length ? h('div', { class: 'chips' }, list.map(({ p, raw }) => {
-    const v = parseFrac(raw);
-    return chip(`${p.n} ${isFinite(v) ? fmtPct(v) : '⚠ ' + raw}`, isFinite(v) ? 'mod' : 'locked', isFinite(v) ? null : 'Не число — в расчёте не участвует');
+    const t = affixValText(raw);
+    return chip(`${p.n} ${t ?? '⚠ ' + raw}`, t ? 'mod' : 'locked', t ? null : 'Не число — в расчёте не участвует');
   })) : null;
 }
 function affixPropsEditor(a) {
   return h('div', { class: 'sub' },
-    h('div', { class: 'sub-title' }, 'Свойства: прибавка в процентах (50%, 0.5 и 0,5 — одно и то же)'),
+    h('div', { class: 'sub-title' }, 'Свойства: прибавка (50%, 0.5 и 0,5 — одно и то же) или множитель (×2 — перемножается)'),
     h('div', { class: 'props-grid' }, PROPS().map(p => {
       const sys = affixPropSys(a, p.id), locked = sys != null && String(sys).trim() !== '';
-      const raw = affixPropRaw(a, p.id), v = parseFrac(raw);
+      const raw = affixPropRaw(a, p.id), t = affixValText(raw);
       return h('label', { class: 'field' }, h('span', { class: 'lbl' }, p.n),
         h('div', { class: 'row small' },
           locked && !ui.master ? h('span', { class: 'prop-sys', title: 'Закреплено правилами мастера' }, '🔒 ' + sys)
@@ -1982,7 +2099,7 @@ function affixPropsEditor(a) {
                   if (ui.master) { setDeep(AFFIX_PROPS, a.name, p.id, t || null); resyncRules(); }
                   else { a.props ||= {}; if (t) a.props[p.id] = t; else delete a.props[p.id]; commit(); }
                 } }),
-          v == null ? null : isFinite(v) ? h('span', { class: 'muted' }, '= ' + fmtPct(v)) : h('span', { class: 'warn' }, 'не число')));
+          t === '' ? null : t ? h('span', { class: 'muted' }, '= ' + t) : h('span', { class: 'warn' }, 'не число')));
     })));
 }
 // Числа ступени — значками в строке ступени
@@ -1992,10 +2109,34 @@ function stagePropChips(el, st) {
     isNum(stagePropSys(el, st, p.id)) ? 'Закреплено правилами мастера' : 'Своё значение'))) : null;
 }
 // Таблица: строки × свойства
-function propsTable(rows) {
+function propsTable(rows, tableId) {
+  const cell = (r, p, ri, ci) => {
+    const node = r.cell(p);
+    if (node?.tagName === 'INPUT') {
+      node.dataset.cell = `${tableId}|${ri}|${ci}`;
+      node.dataset.orig = node.value;
+      node.addEventListener('keydown', e => propsTableEnter(e, tableId));
+    }
+    return node;
+  };
   return h('div', { class: 'table-wrap' }, h('table', { class: 'props-table' },
-    h('thead', null, h('tr', null, h('th', null, ''), PROPS().map(p => h('th', null, p.n)))),
-    h('tbody', null, rows.map(r => h('tr', null, h('td', { class: 'row-name' }, r.name), PROPS().map(p => h('td', null, r.cell(p))))))));
+    h('thead', null, h('tr', null, h('th', { class: 'corner' }, ''), PROPS().map(p => h('th', null, p.n)))),
+    h('tbody', null, rows.map((r, ri) => h('tr', null, h('th', { class: 'row-name' }, r.name), PROPS().map((p, ci) => h('td', null, cell(r, p, ri, ci))))))));
+}
+// Enter — к следующей ячейке вниз по столбцу; в конце столбца — к началу следующего; из последней — в первую
+function propsTableEnter(e, tableId) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const pos = el => el.dataset.cell.split('|').slice(1).map(Number);
+  const list = [...document.querySelectorAll(`input[data-cell^="${tableId}|"]`)]
+    .sort((a, b) => pos(a)[1] - pos(b)[1] || pos(a)[0] - pos(b)[0]);
+  const next = list[(list.indexOf(e.target) + 1) % list.length];
+  if (!next) return;
+  ui.focusCell = next.dataset.cell;
+  // изменённое значение сохраняется (лист перерисуется и поставит курсор в следующую ячейку)
+  if (e.target.value !== e.target.dataset.orig) e.target.dispatchEvent(new Event('change'));
+  // если перерисовки не было (значение то же или не число) — переходим сами
+  if (ui.focusCell) { ui.focusCell = null; const n = document.querySelector('[data-cell="' + next.dataset.cell + '"]') || next; n.focus(); n.select?.(); }
 }
 function propsSection() {
   const em = EM();
@@ -2009,16 +2150,18 @@ function propsSection() {
     em.elements.map(el => fold('props-el-' + el.id, `${ELEMENT_ICON[el.id] || ''} ${el.name}: числа ступеней`,
       propsTable(el.stages.map(st => ({ name: st.name, cell: p => propNumCell(stagePropSys(el, st, p.id), stagePropUser(el, st, p.id),
         v => { setDeep(em.stageProps ||= {}, stageKey(el, st), p.id, v); commit(); },
-        v => { setDeep(STAGE_PROPS, stageKey(el, st), p.id, v); resyncRules(); }) }))))),
+        v => { setDeep(STAGE_PROPS, stageKey(el, st), p.id, v); resyncRules(); }) })), 'stage-' + el.id))),
     fold('props-schools', 'Тайные школы: числа (на будущее, в расчётах пока не участвуют)',
       propsTable(ARCANE_SCHOOLS.map(([id, name]) => ({ name, cell: p => propNumCell(SCHOOL_PROPS[id]?.[p.id], state.schoolProps?.[id]?.[p.id],
         v => { setDeep(state.schoolProps ||= {}, id, p.id, v); commit(); },
-        v => { setDeep(SCHOOL_PROPS, id, p.id, v); resyncRules(); }) })))));
+        v => { setDeep(SCHOOL_PROPS, id, p.id, v); resyncRules(); }) })), 'schools')));
 }
 // Режим мастера: справочник свойств
 function masterPropsEditor() {
   return h('div', { class: 'form master-edit' },
-    PROP_SEED.map(p => h('div', { class: 'row small' },
+    PROP_SEED.map((p, i) => h('div', { class: 'row small' },
+      btn('↑', () => { PROP_SEED.splice(i, 1); PROP_SEED.splice(i - 1, 0, p); resyncRules(); }, 'ghost small sq', i === 0, 'Выше'),
+      btn('↓', () => { PROP_SEED.splice(i, 1); PROP_SEED.splice(i + 1, 0, p); resyncRules(); }, 'ghost small sq', i === PROP_SEED.length - 1, 'Ниже'),
       ruleInput(p.n, v => { if (v.trim()) p.n = v.trim(); }),
       h('span', { class: 'muted' }, 'коэффициент'),
       ruleInput(p.coef ?? 1, v => { p.coef = Number(String(v).replace(',', '.')) || 0; }),
@@ -2072,6 +2215,15 @@ function castSpell(spell) {
   if (spell.stageId) addTempArmor(spell);
   commit();
   paidToast(name, cost, ex, st);
+}
+
+// Применить то, что собрано в конструкторе, не сохраняя
+function castDraft() {
+  const d = ui.draft;
+  if (!spellParts().some(p => d[p.key])) { toast('Выбери хотя бы одну часть заклинания', 'error'); return; }
+  const c = costCalc(d);
+  if (!d.costManual && c.error) { toast('Стоимость не рассчитать: ' + c.error + '. Поставь «своя стоимость».', 'error'); return; }
+  castSpell({ ...d, name: d.name.trim() || autoSpellName(d) });
 }
 
 function saveDraftToBook() {
@@ -2169,7 +2321,7 @@ function levelCtl(obj, key, min = 0) {
 function editToggle(id, cls = '') {
   const ed = ui.editing.has(id);
   return btn(ed ? '✓ Готово' : '✎', () => { ed ? ui.editing.delete(id) : ui.editing.add(id); commit(); },
-    'small ' + (ed ? 'primary ' : 'ghost ') + cls, false, ed ? 'Закончить редактирование' : 'Редактировать');
+    'small edit-btn ' + (ed ? 'primary ' : 'ghost ') + cls, false, ed ? 'Закончить редактирование' : 'Редактировать');
 }
 function fold(key, summary, content, defOpen = false, cls = '') {
   const open = key in ui.open ? ui.open[key] : defOpen;
@@ -2188,15 +2340,31 @@ function removeWithConfirm(arr, obj, msg, after) {
 }
 const dangerRow = (label, fn) => h('div', { class: 'danger-row' }, btn('🗑 ' + label, fn, 'danger small'));
 
+// Второе поле поиска под списком, если список длиннее двух экранов
+function bottomSearch(box, bottom, top) {
+  bottom.classList.add('search-bottom');
+  requestAnimationFrame(() => {
+    if (!box.isConnected) return;
+    const need = box.offsetHeight > 2 * innerHeight;
+    if (need && !bottom.isConnected) box.after(h('div', { class: 'toolbar search-bottom-row' }, bottom));
+    if (!need && bottom.isConnected) {
+      const had = document.activeElement === bottom;
+      bottom.parentElement.remove();
+      if (had) top.focus();
+    }
+  });
+}
 function searchableList({ key, placeholder, items, filter, renderItem, empty, wrapCls = 'list' }) {
   const box = h('div', { class: wrapCls });
+  const mk = () => h('input', { type: 'search', class: 'search', placeholder, value: ui.search[key] || '',
+    oninput: e => { ui.search[key] = e.target.value; for (const x of [input, bottom]) if (x !== e.target) x.value = e.target.value; draw(); } });
+  const input = mk(), bottom = mk();
   const draw = () => {
     const q = (ui.search[key] || '').trim().toLowerCase();
     const arr = items().filter(it => !q || filter(it, q));
     box.replaceChildren(...(arr.length ? arr.map(renderItem) : [h('div', { class: 'empty' }, q ? 'Ничего не найдено.' : empty)]));
+    bottomSearch(box, bottom, input);
   };
-  const input = h('input', { type: 'search', class: 'search', placeholder, value: ui.search[key] || '',
-    oninput: e => { ui.search[key] = e.target.value; draw(); } });
   draw();
   return { input, box, draw };
 }
@@ -2322,10 +2490,16 @@ function render() {
   const tab = TABS.find(t => t.id === state.ui.tab) || TABS[0];
   view.replaceChildren();
   if (ui.master) view.append(masterBar());
+  if (CHANGELOG.length && state.ui.seenVersion !== CHANGELOG[0].v) view.append(updateBanner());
   ui.mentionTargets = null;
   // append с разворачиванием массивов и пропуском пустых значений
   tab.render({ append: (...kids) => view.append(...kids.flat(Infinity).filter(k => k != null && k !== false)) });
   // после создания — курсор в поле названия, текст выделен, чтобы сразу печатать своё
+  if (ui.focusCell) {
+    const el = document.querySelector(`[data-cell="${ui.focusCell}"]`);
+    ui.focusCell = null;
+    if (el) { el.focus(); el.select?.(); }
+  }
   if (ui.focusName) {
     const el = document.querySelector(`[data-name-for="${ui.focusName}"]`);
     ui.focusName = null;
@@ -2417,7 +2591,8 @@ function renderCharacterTab(v) {
             field('Описание / внешность', txt(c, 'bio', { multi: true, rows: 6 })),
             field('Игрок — твоё имя (для визитки)', txt(c, 'player')),
             h('div', { class: 'row' }, btn('Обновить вид', render, 'small'),
-              btn('🪪 Сохранить визитку', exportCard, 'small', false,
+              helpBtn('card', 'Как работает визитка'),
+              btn('📇 Сохранить визитку', exportCard, 'small', false,
                 'Файл для других игроков: имя, титул, описание, портрет и игрок. У них ты появишься в NPC как «персонаж игрока».'))))
         )),
         statsPanel()),
@@ -2550,7 +2725,7 @@ function statCard(def, left) {
       : null,
     def.key === 'reserve' ? h('div', { class: 'small muted', style: 'margin-top:6px' },
       'Открыт: одна из характеристик дошла до ', STAT_MAX, '. Пополняется свободными очками без максимума. ',
-      'Когда заклинание тратит характеристику, сначала тратится Запас.') : null,
+      'Когда заклинание тратит характеристику, сначала тратится Потенциал.') : null,
     def.thresholds ? thresholdBlock(def, total) : null);
 }
 
@@ -2775,26 +2950,69 @@ function effectsEditor(it, title = 'Эффекты предмета (дейст�
    ARCANE MAGIC
    ===================================================================== */
 const schoolName = id => ARCANE_SCHOOLS.find(x => x[0] === id)?.[1] || '';
-// Заклинание школы доступно, когда отмечено «изучено»; свои — всегда
 const openSchools = () => state.character.arcaneSchools || [];
 const schoolOpen = id => openSchools().includes(id);
-const isArcaneKnown = sp => !sp.sys || (!!sp.learned && schoolOpen(sp.school));
+// Все тайные заклинания — свои (списка школ в листе нет), применять можно всегда
+const isArcaneKnown = () => true;
+
+/* ---------- обмен тайными заклинаниями: файл одного заклинания ---------- */
+const SPELL_KIND = FILE_PREFIX + '-spell';
+const ARCANE_EXPORT_FIELDS = ['name', 'school', 'level', 'manaCost', 'exhaustCost', 'statCost', 'description', 'tags', 'extra', 'image'];
+function exportArcane(sp) {
+  const spell = Object.fromEntries(ARCANE_EXPORT_FIELDS.filter(k => sp[k] != null && sp[k] !== '').map(k => [k, sp[k]]));
+  const slug = (sp.name || 'spell').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
+  downloadText(JSON.stringify({ kind: SPELL_KIND, spellVersion: 1, type: 'arcane', date: new Date().toISOString(), spell }, null, 2),
+    `${FILE_PREFIX}-spell-${slug}.json`);
+}
+// Загруженное заклинание: такое уже есть — заменить текст и стоимость (счётчик и заметки остаются) или добавить копией
+function importArcane(data) {
+  const src = data.spell || {};
+  if (!src.name) { toast('В файле нет заклинания', 'error'); return; }
+  const fields = Object.fromEntries(ARCANE_EXPORT_FIELDS.map(k => [k, src[k] ?? (k === 'statCost' ? {} : k === 'tags' ? [] : ['manaCost', 'exhaustCost'].includes(k) ? 0 : '')]));
+  const same = state.arcaneSpells.find(x => normName(x.name) === normName(src.name));
+  let sp;
+  if (same && confirm(`У тебя уже есть «${same.name}». Заменить его описание и стоимость из файла?\nСчётчик и заметки останутся.\n\nОтмена — добавить копией.`)) {
+    sp = Object.assign(same, fields);
+  } else {
+    sp = { id: uid('arc'), ...fields, notes: '', uses: 0 };
+    state.arcaneSpells.push(sp);
+  }
+  if (sp.school && !schoolOpen(sp.school)) toast(`Школа «${schoolName(sp.school)}» у тебя не отмечена — заклинание видно в фильтре «все школы»`);
+  commit();
+  goToCard('arcane', 'arc-' + sp.id, () => { ui.search.arcane = ''; });
+  toast(`Заклинание «${sp.name}» загружено`, 'ok');
+}
+function spellFileInput() {
+  const input = h('input', { type: 'file', accept: '.json,application/json', style: 'display:none', onchange: e => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    f.text().then(t => {
+      let d;
+      try { d = JSON.parse(t); } catch { toast('Файл не является корректным JSON', 'error'); return; }
+      if (d?.kind !== SPELL_KIND || d.type !== 'arcane') { toast('Это не файл тайного заклинания', 'error'); return; }
+      importArcane(d);
+    });
+  } });
+  return [btn('⬆ Загрузить заклинание', () => input.click(), '', false, 'Файл заклинания от мастера или другого игрока'), input];
+}
 
 function renderArcaneTab(v) {
   const f = ui.filters;
   const order = sp => { const i = ARCANE_SCHOOLS.findIndex(x => x[0] === sp.school); return i < 0 ? 99 : i; };
+  // по умолчанию — заклинания отмеченных школ и без школы (если школы не отмечены — все)
+  const mine = sp => !openSchools().length || !sp.school || schoolOpen(sp.school);
   const L = searchableList({
     key: 'arcane', placeholder: 'Поиск заклинания…',
     items: () => state.arcaneSpells
-      .filter(sp => (!f.arcaneSchool ? !sp.sys || schoolOpen(sp.school) : f.arcaneSchool === 'all' || (sp.school || 'none') === f.arcaneSchool)
-        && (!f.arcaneMine || isArcaneKnown(sp)))
-      .sort((a, b) => isArcaneKnown(b) - isArcaneKnown(a) || order(a) - order(b) || byName(a, b)),
+      .filter(sp => !f.arcaneSchool ? mine(sp) : f.arcaneSchool === 'all' || (sp.school || 'none') === f.arcaneSchool)
+      .sort((a, b) => order(a) - order(b) || byName(a, b)),
     filter: (sp, q) => has(q, sp.name, sp.description, sp.notes, sp.extra, (sp.tags || []).join(' '), schoolName(sp.school)),
     renderItem: arcaneCard, empty: 'Заклинаний нет.',
   });
   v.append(
-    h('p', { class: 'hint' }, 'Тайные школы: ', ARCANE_SCHOOLS.map(x => x[1]).join(', '), '. Заклинания школ — общий список мастера: ',
-      'отметь «изучено», и заклинание можно применять и брать в комбо. Свои заклинания добавляются кнопкой и правятся полностью. ',
+    h('p', { class: 'hint' }, 'Тайные школы: ', ARCANE_SCHOOLS.map(x => x[1]).join(', '), '. Заклинания добавляются кнопкой или загружаются из файла ',
+      '(мастер или другой игрок сохраняет его кнопкой «⬇ Экспорт» у заклинания). ',
       'Кнопка «Применить» списывает ману, а также истощение и характеристики, если они указаны.'),
     h('section', { class: 'panel' },
       h('div', { class: 'row' }, h('b', null, 'Мои тайные школы:'),
@@ -2804,9 +3022,8 @@ function renderArcaneTab(v) {
             if (e.target.checked) { if (!list.includes(id)) list.push(id); } else list.splice(list.indexOf(id), 1);
             commit();
           } }), name))),
-      h('div', { class: 'small muted', style: 'margin-top:4px' }, openSchools().length
-        ? 'Заклинания закрытых школ видны в фильтре «все школы», но изучить их нельзя.'
-        : 'Отметь школу, доступную персонажу (в начале игры — одна). Тогда появятся её заклинания.')),
+      h('div', { class: 'small muted', style: 'margin-top:4px' },
+        'Отметь школы, доступные персонажу (в начале игры — одна). В списке по умолчанию — заклинания этих школ и без школы.')),
     toolbar(btn('+ Своё заклинание', () => {
       const school = ARCANE_SCHOOLS.some(x => x[0] === f.arcaneSchool) ? f.arcaneSchool : '';
       const sp = { id: uid('arc'), name: nameFromSearch('arcane', 'Новое заклинание'), school, description: '', manaCost: 0, exhaustCost: 0, level: '', notes: '', uses: 0 };
@@ -2814,40 +3031,24 @@ function renderArcaneTab(v) {
       ui.editing.add(sp.id);
       ui.focusName = sp.id;
       commit();
-    }, 'primary'), L.input,
-      sel(f.arcaneSchool || '', [['', 'мои школы и свои'], ['all', 'все школы'], ...ARCANE_SCHOOLS, ['none', 'без школы']], val => { f.arcaneSchool = val; render(); }),
-      ui.master ? btn('🎓 + Заклинание школы', () => {
-        const school = ARCANE_SCHOOLS.some(x => x[0] === f.arcaneSchool) ? f.arcaneSchool : 'transform';
-        const n = uniqueSeedName(ARCANE_SEED, 'Новое заклинание');
-        ARCANE_SEED.push({ school, n, lvl: '', cost: 0, tags: [], d: '' });
-        if (!schoolOpen(school)) f.arcaneSchool = 'all';
-        resyncRules();
-        const sp = state.arcaneSpells.find(x => x.name === n);
-        if (sp) { ui.editing.add(sp.id); render(); }
-      }, 'master-btn') : null,
-      h('label', { class: 'chk small' }, h('input', { type: 'checkbox', checked: !!f.arcaneMine,
-        onchange: e => { f.arcaneMine = e.target.checked; L.draw(); } }), 'только изученные и свои')),
+    }, 'primary'), spellFileInput(), L.input,
+      sel(f.arcaneSchool || '', [['', 'мои школы'], ['all', 'все школы'], ...ARCANE_SCHOOLS, ['none', 'без школы']], val => { f.arcaneSchool = val; render(); })),
     L.box);
 }
 
 function arcaneCard(sp) {
-  const ed = ui.editing.has(sp.id), known = isArcaneKnown(sp), ex = spellExhaust(sp);
-  const view = [sp.description ? h('div', { class: 'desc' }, rich(sp.description)) : null,
-    sp.extra ? h('div', { class: 'desc small' }, h('b', null, 'Примечание: '), rich(sp.extra)) : null];
-  return h('div', { class: 'card spell' + (known ? '' : ' locked'), id: 'arc-' + sp.id },
+  const ed = ui.editing.has(sp.id), ex = spellExhaust(sp);
+  return h('div', { class: 'card spell', id: 'arc-' + sp.id },
     h('div', { class: 'card-head' },
       thumb(sp.image),
-      h('div', { class: 'card-title' }, (known ? '' : '🔒 ') + (sp.name || 'Без названия')),
+      h('div', { class: 'card-title' }, sp.name || 'Без названия'),
       sp.school ? chip(schoolName(sp.school), 'affix', 'Тайная школа') : null,
       sp.level ? chip('Ур. ' + sp.level) : null,
       h('span', { class: 'cost' }, '💧 ' + (sp.manaCost || 0)),
       exChip(ex), statChips(statCostOf(sp)),
-      sp.sys ? h('label', { class: 'chk small', title: schoolOpen(sp.school) ? 'Заклинание школы изучено персонажем' : 'Школа не открыта — отметь её в «Мои тайные школы»' },
-          h('input', { type: 'checkbox', checked: !!sp.learned, disabled: !schoolOpen(sp.school), onchange: e => { sp.learned = e.target.checked; commit(); } }), 'изучено')
-        : chip('своё', 'mod', 'Своё заклинание — не из списка школы'),
       editToggle(sp.id)),
     sp.tags?.length ? h('div', { class: 'chips' }, sp.tags.map(t => chip(t))) : null,
-    ed && !sp.sys ? h('div', { class: 'form' },
+    ed ? h('div', { class: 'form' },
       h('div', { class: 'grid3' },
         field('Название', txt(sp, 'name', { nameFor: sp.id })),
         field('Школа', sel(sp.school || '', [['', '— без школы —'], ...ARCANE_SCHOOLS], val => { sp.school = val; commit(); })),
@@ -2856,18 +3057,15 @@ function arcaneCard(sp) {
         field('Картинка — путь или URL', txt(sp, 'image'))),
       extraCostRow(sp),
       field('Описание', txt(sp, 'description', { multi: true, rows: 4 })),
-      field('Заметки', txt(sp, 'notes', { multi: true, rows: 2 })),
+      field('Примечание', txt(sp, 'extra', { multi: true, rows: 2, placeholder: 'уходит в файл вместе с заклинанием' })),
+      field('Заметки (только твои, в файл не уходят)', txt(sp, 'notes', { multi: true, rows: 2 })),
       dangerRow('Удалить заклинание', () => removeWithConfirm(state.arcaneSpells, sp, `Удалить заклинание «${sp.name}»?` + combosUsing('arcane', sp.id))))
-      : ed && sp.sys && ui.master ? null : view,
-    ed && sp.sys && ui.master ? masterArcaneEditor(sp) : null,
-    ed && sp.sys && !ui.master ? h('div', { class: 'form' },
-      h('p', { class: 'hint', style: 'margin:0' }, 'Заклинание из списка школы: описание задаёт мастер. Здесь — твои заметки и картинка.'),
-      field('Заметки', txt(sp, 'notes', { multi: true, rows: 2 })),
-      field('Картинка — путь или URL', txt(sp, 'image')))
-      : !ed && sp.notes ? h('div', { class: 'notes' }, '📝 ', rich(sp.notes)) : null,
+      : [sp.description ? h('div', { class: 'desc' }, rich(sp.description)) : null,
+         sp.extra ? h('div', { class: 'desc small' }, h('b', null, 'Примечание: '), rich(sp.extra)) : null,
+         sp.notes ? h('div', { class: 'notes' }, '📝 ', rich(sp.notes)) : null],
     h('div', { class: 'row actions' },
-      btn(castLabel(sp.manaCost || 0, ex, undefined, statCostOf(sp)), () => castSpell(sp), 'primary cast', !known,
-        known ? null : schoolOpen(sp.school) ? 'Сначала отметь «изучено»' : 'Школа не открыта'),
+      btn(castLabel(sp.manaCost || 0, ex, undefined, statCostOf(sp)), () => castSpell(sp), 'primary cast'),
+      btn('⬇ Экспорт', () => exportArcane(sp), 'ghost small', false, 'Сохранить заклинание в файл, чтобы передать другому игроку'),
       sp.uses ? h('span', { class: 'uses' }, `использовано ${sp.uses} раз`) : null));
 }
 
@@ -3274,6 +3472,8 @@ function renderSpellbookTab(v) {
         field('Заметки', txt(d, 'notes', { multi: true, rows: 2 })),
         h('div', { class: 'row' },
           btn('📖 Сохранить в книгу', saveDraftToBook, 'primary'),
+          btn(castLabel(spellCost(d), spellExhaust(d), '✦ Применить', statCostOf(d)), castDraft, 'primary cast', false,
+            'Применить заклинание из конструктора, не сохраняя в книгу: списывает ману (и истощение, характеристики)'),
           btn('Очистить', () => { ui.draft = emptyDraft(); render(); }, 'ghost')))),
     h('h2', null, `Книга заклинаний (${state.spellbook.length})`),
     toolbar(L.input), L.box,
@@ -3390,7 +3590,7 @@ function spellCard(s) {
       exChip(spellExhaust(s)), statChips(statCostOf(s)),
       // закрытие редактирования — с проверкой отрицательных процентов
       btn(ed ? '✓ Готово' : '✎', () => { if (ed) { ui.editing.delete(s.id); warnNegative(s); } else ui.editing.add(s.id); commit(); },
-        'small ' + (ed ? 'primary' : 'ghost'), false, ed ? 'Закончить редактирование' : 'Редактировать')),
+        'small edit-btn ' + (ed ? 'primary' : 'ghost'), false, ed ? 'Закончить редактирование' : 'Редактировать')),
     spellFormula(s),
     propsView(s, ed),
     chainLine(s),
@@ -4388,6 +4588,9 @@ function renderChronicleTab(v) {
     commit();
   };
   const box = h('div', { class: 'list' });
+  const chrSearch = () => h('input', { type: 'search', class: 'search', placeholder: 'Поиск по летописи…', value: ui.search.chronicle || '',
+    oninput: e => { ui.search.chronicle = e.target.value; for (const x of [chrTop, chrBottom]) if (x !== e.target) x.value = e.target.value; draw(); } });
+  const chrTop = chrSearch(), chrBottom = chrSearch();
   const draw = () => {
     const q = (ui.search.chronicle || '').trim().toLowerCase();
     const match = x => !q || has(q, x.e.when, x.e.title, x.e.text);
@@ -4406,6 +4609,7 @@ function renderChronicleTab(v) {
       for (const x of und) out.push(chronicleCard(x.e, targets, q ? [] : undated));
     }
     box.replaceChildren(...(out.length ? out : [h('div', { class: 'empty' }, q ? 'Ничего не найдено.' : 'Летопись пока пуста.')]));
+    bottomSearch(box, chrBottom, chrTop);
   };
   draw();
   // форма открыта только по кнопке; свёрнутый черновик сохраняется до перезагрузки
@@ -4430,8 +4634,7 @@ function renderChronicleTab(v) {
         render();
         document.getElementById('chr-new-text')?.focus();
       }, 'primary'),
-      h('input', { type: 'search', class: 'search', placeholder: 'Поиск по летописи…', value: ui.search.chronicle || '',
-        oninput: e => { ui.search.chronicle = e.target.value; draw(); } }),
+      chrTop,
       btn(ui.chrNewestFirst ? '↓ сначала новые' : '↑ сначала старые', () => { ui.chrNewestFirst = !ui.chrNewestFirst; render(); }, 'ghost small')),
     box);
 }
@@ -4680,8 +4883,8 @@ function renderNpcTab(v) {
     toolbar(
       btn('+ Персона', () => addNpc('person'), 'primary'),
       btn('+ Группа', () => addNpc('group'), 'primary'),
-      cardInput(),
-      dup.button,
+      cardInput(), helpBtn('card', 'Как работает визитка'),
+      dup.button, dup.button ? helpBtn('dups', 'Дубли и как их объединить') : null,
       collapseBtn(state.npcs.map(n => n.id)),
       L.input,
       sel(kind, [['', 'все карточки'], ['person', 'только персоны'], ['group', 'только группы'], ['pc', 'только персонажи игроков']], val => { ui.filters.npcKind = val; L.draw(); }),
@@ -5520,6 +5723,54 @@ const HELP_SECTIONS = [
     ],
   },
   {
+    id: 'card', title: 'Визитка и персонажи других игроков',
+    body: () => [
+      h('p', null, 'У каждого персонажа есть постоянный скрытый номер. По нему лист узнаёт «это тот же персонаж», даже если поменялось имя. ',
+        'Номер сохраняется при экспорте и импорте JSON; новый появляется только после «Сбросить все данные».'),
+      h('h4', null, 'Сделать свою визитку'),
+      h('ol', null,
+        h('li', null, 'Вкладка «Персонаж» → «Редактировать профиль» → впиши «Игрок — твоё имя».'),
+        h('li', null, 'Нажми «📇 Сохранить визитку» — скачается маленький файл.'),
+        h('li', null, 'Перешли его другим игрокам (например, в Telegram).')),
+      h('p', null, h('b', null, 'В визитку попадают: '), 'номер, имя, титул, «Описание / внешность», путь к портрету и имя игрока. ',
+        'Характеристики, заклинания, инвентарь и заметки — нет. ',
+        h('b', null, 'Описание уходит целиком'), ' — убери из него то, чего другие знать не должны.'),
+      h('h4', null, 'Загрузить чужую визитку'),
+      h('p', null, 'Вкладка NPC → «📇 Загрузить визитку» (или обычный «Импорт JSON» — он узнает визитку и не заменит ею лист). ',
+        'Появится карточка вида «🧙 Персонаж игрока» со значком «🎲 игрок: …». Дальше это обычная карточка: заметки, статусы, фракции, отношения, договоры.'),
+      h('h4', null, 'Обновление'),
+      h('p', null, 'Игрок поменял описание — пусть пришлёт новую визитку, загрузи её так же. Обновятся имя, титул, описание, портрет и игрок; ',
+        'твои заметки, статусы, фракции, отношения и договоры останутся.'),
+      h('h4', null, 'Свой персонаж'),
+      h('p', null, 'Карточка с номером твоего персонажа в твоём NPC не показывается (у других — видна). Своя визитка не загружается. ',
+        'Имя своего персонажа в текстах ведёт на вкладку «Персонаж».'),
+      h('h4', null, 'Ограничения'),
+      h('ul', null,
+        h('li', null, 'Портрет — это путь. Файл с твоего компьютера у другого не откроется; сработает только адрес из интернета (https://…).'),
+        h('li', null, 'Визитка не обновляется сама — её нужно пересылать.'),
+        h('li', null, 'Если персонаж игрока уже был заведён вручную, визитка его не узнает — появится вторая карточка. Как их объединить — в разделе «Похожие карточки (дубли)».')),
+    ],
+  },
+  {
+    id: 'dups', title: 'Похожие карточки (дубли) и как их объединить',
+    body: () => [
+      h('p', null, 'Кнопка «🔍 Возможные дубли» (в NPC, инвентаре, географии) появляется, когда у карточек похожие названия — ',
+        'с учётом «Других имён», опечаток и падежей (от 70% сходства). В режиме дублей пары показаны рядом, обе карточки можно править прямо там.'),
+      h('p', null, h('b', null, 'Пара не нашлась? '), 'Если имена сильно разные (например, «Брамуил» и «Брам», «Кейтлин» и «Кейт»), ',
+        'впиши имя второй карточки в «Другие имена» первой — пара появится.'),
+      h('h4', null, 'Если это разные'),
+      h('p', null, 'Нажми «Это разные» — пара больше не будет предлагаться.'),
+      h('h4', null, 'Если это одно и то же — объединить вручную'),
+      h('ol', null,
+        h('li', null, 'Реши, какая карточка остаётся. Для персонажа игрока — та, что из визитки (🧙): её обновляют следующие визитки.'),
+        h('li', null, 'Открой ✎ у лишней карточки и перенеси в оставшуюся то, что нужно: заметки, статусы, фракции, места, договоры, отношения, «Другие имена».'),
+        h('li', null, 'Проверь ссылки на лишнюю карточку: отношения других NPC к ней («Отношения» у других карточек) и квесты, где она указана, — перепривяжи их к оставшейся. ',
+          'Упоминания в летописи и текстах перепривязывать не нужно: они ищутся по имени.'),
+        h('li', null, 'Удали лишнюю карточку (✎ → «Удалить»).')),
+      h('p', null, 'Пара исчезнет из списка дублей сама.'),
+    ],
+  },
+  {
     id: 'schemes', title: 'Схемы превращений стихий',
     body: () => [
       h('p', null, 'Как одна ступень стихии превращается в другую и какие аффиксы для этого нужны. Схема открывается и кнопкой «?» на карточке стихии во вкладке «Стихийная магия».'),
@@ -5637,12 +5888,40 @@ function storagePanel() {
       h('span', { class: 'small muted' }, 'Картинки не занимают места — в листе хранятся только пути к ним.')));
 }
 
+/* ---------- «Что нового» ---------- */
+// 202610141630 → «14.10.2026 16:30»
+const versionDate = v => { const m = String(v).match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/); return m ? `${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}` : String(v); };
+// «**жирный** текст» → элементы
+const boldText = t => String(t).split(/\*\*/).map((part, i) => i % 2 ? h('b', null, part) : part);
+function changelogEntry(e) {
+  return h('div', { class: 'changelog' },
+    (e.sections || []).map(sec => [h('div', { class: 'sub-title' }, sec.h), h('ul', null, sec.items.map(t => h('li', null, boldText(t))))]),
+    e.todo?.length ? h('div', { class: 'changelog-todo' }, h('b', null, 'После обновления сделай:'),
+      h('ol', null, e.todo.map(t => h('li', null, boldText(t))))) : null);
+}
+function changelogPanel() {
+  return h('section', { class: 'panel', id: 'whats-new' },
+    h('div', { class: 'panel-title' }, '🆕 Что нового'),
+    CHANGELOG.length ? CHANGELOG.map((e, i) => fold('ver-' + e.v, `Версия ${e.v} — ${versionDate(e.v)}`, changelogEntry(e), i === 0))
+      : h('div', { class: 'small muted' }, 'Записей пока нет — они появятся с первым обновлением листа.'));
+}
+// Плашка один раз после обновления листа
+function updateBanner() {
+  const v = CHANGELOG[0].v, seen = () => { state.ui.seenVersion = v; saveSoon(); };
+  return h('div', { class: 'update-banner' },
+    h('span', null, '🆕 Лист обновлён — версия ', h('b', null, v), ` от ${versionDate(v)}`),
+    h('span', { class: 'grow' }),
+    btn('Что нового', () => { seen(); ui.open['ver-' + v] = true; goTab('data'); document.getElementById('whats-new')?.scrollIntoView({ block: 'start' }); }, 'primary small'),
+    btn('✕', () => { seen(); render(); }, 'ghost small sq', false, 'Скрыть'));
+}
+
 function renderDataTab(v) {
   const size = new Blob([store.get(STORAGE_KEY) || '']).size;
   const backups = getBackups();
   const fileInput = h('input', { type: 'file', accept: '.json,application/json', style: 'display:none',
     onchange: e => { const f = e.target.files[0]; if (f) importJSONFile(f); e.target.value = ''; } });
   v.append(
+    changelogPanel(),
     storagePanel(),
     (() => {
       const list = propMismatches();
@@ -5713,7 +5992,6 @@ function applyMasterRules() {
     const r = JSON.parse(store.get(RULES_KEY) || 'null');
     if (!r) return;
     if (Array.isArray(r.forms)) FORM_SEED.splice(0, FORM_SEED.length, ...r.forms);
-    if (Array.isArray(r.arcane)) ARCANE_SEED.splice(0, ARCANE_SEED.length, ...r.arcane);
     if (Array.isArray(r.extraAffixes)) EXTRA_AFFIXES.splice(0, EXTRA_AFFIXES.length, ...r.extraAffixes);
     if (Array.isArray(r.props)) PROP_SEED.splice(0, PROP_SEED.length, ...r.props);
     for (const [obj, src] of [[STAGE_PROPS, r.stageProps], [AFFIX_PROPS, r.affixProps], [SCHOOL_PROPS, r.schoolProps]])
@@ -5721,7 +5999,7 @@ function applyMasterRules() {
   } catch (e) { console.error(e); }
 }
 function rulesData() {
-  return { kind: FILE_PREFIX + '-rules', savedAt: new Date().toISOString(), forms: FORM_SEED, arcane: ARCANE_SEED, extraAffixes: EXTRA_AFFIXES,
+  return { kind: FILE_PREFIX + '-rules', savedAt: new Date().toISOString(), forms: FORM_SEED, extraAffixes: EXTRA_AFFIXES,
     props: PROP_SEED, stageProps: STAGE_PROPS, affixProps: AFFIX_PROPS, schoolProps: SCHOOL_PROPS,
     affixDescriptions: Object.fromEntries(EM().affixes.filter(a => a.description?.trim()).map(a => [a.name, a.description])) };
 }
@@ -5729,7 +6007,6 @@ function rulesData() {
 function resyncRules() {
   syncFormsFromSeed(state);
   ensureSeedAffixes(state);
-  syncArcaneFromSeed(state);
   store.set(RULES_KEY, JSON.stringify(rulesData()));
   commit();
 }
@@ -5771,31 +6048,6 @@ function masterFormEditor(f) {
       FORM_SEED.splice(FORM_SEED.indexOf(sd), 1);
       for (const x of FORM_SEED) if (x.prev === sd.n) delete x.prev;
       ui.editing.delete(f.id);
-      resyncRules();
-    }));
-}
-
-function masterArcaneEditor(sp) {
-  const sd = ARCANE_SEED.find(x => x.n === sp.name);
-  if (!sd) return null;
-  sd.st ||= {};
-  return h('div', { class: 'form master-edit' },
-    h('div', { class: 'grid3' },
-      field('Название', ruleInput(sd.n, v => { v = v.trim(); if (v) { sp.name = v; sd.n = v; } })),
-      field('Школа', sel(sd.school, ARCANE_SCHOOLS, v => { sd.school = v; resyncRules(); })),
-      field('Уровень', ruleInput(sd.lvl, v => { sd.lvl = v.trim(); })),
-      field('Мана', ruleInput(sd.cost || 0, v => { sd.cost = v; }, { type: 'number' })),
-      field('Истощение', ruleInput(sd.ex || 0, v => { if (v) sd.ex = v; else delete sd.ex; }, { type: 'number' })),
-      field('Метки — через запятую', ruleInput((sd.tags || []).join(', '), v => { sd.tags = splitCsv(v); }))),
-    h('div', { class: 'row small' }, h('span', { class: 'muted' }, 'Тратит навсегда:'),
-      MANA_STATS.map(k => h('label', { class: 'chk' }, STAT_SHORT[k],
-        ruleInput(sd.st[k] || 0, v => { if (v) sd.st[k] = v; else delete sd.st[k]; }, { type: 'number' })))),
-    field('Описание', ruleInput(sd.d, v => { sd.d = v; }, { multi: true })),
-    field('Примечание мастера', ruleInput(sd.x, v => { if (v.trim()) sd.x = v; else delete sd.x; })),
-    dangerRow('Убрать из списка школы', () => {
-      if (!confirm(`Убрать «${sd.n}» из списка школы? У игроков, которые его изучили, оно останется своим заклинанием.`)) return;
-      ARCANE_SEED.splice(ARCANE_SEED.indexOf(sd), 1);
-      ui.editing.delete(sp.id);
       resyncRules();
     }));
 }
