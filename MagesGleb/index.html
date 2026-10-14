@@ -43,6 +43,33 @@ button,input,select,textarea{font:inherit;color:inherit}
 .tab:hover{color:var(--text)}
 .tab.active{color:var(--gold2);border-bottom-color:var(--gold)}
 .tab-ico,.tab-short{display:none}
+.armor-block{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
+.armor-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:6px}
+.armor-name{min-width:140px}
+.armor-cells{display:inline-flex;flex-wrap:wrap;gap:4px}
+.armor-cell{width:20px;height:20px;accent-color:#8a7a5a;cursor:pointer}
+.props-line{display:flex;flex-wrap:wrap;gap:6px 10px;margin:6px 0}
+.prop-chip{border:1px solid var(--line2);border-radius:12px;padding:1px 9px;font-size:13.5px;background:var(--bg2)}
+.prop-chip.manual{border-style:dashed}
+.prop-chip.neg{border-color:#c0504d;color:#f08a87}
+.prop-edit{display:inline-flex;align-items:center;gap:6px}
+.prop-in{width:70px;padding:2px 6px}
+.prop-in.master,input.master{outline:1px solid #6b4f8a}
+.prop-sys{color:var(--muted);font-size:13px}
+.props-row{margin-top:4px;gap:4px 12px}
+.props-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 12px}
+.table-wrap{overflow-x:auto;margin:6px 0}
+.props-table{border-collapse:collapse;font-size:13.5px}
+.props-table th,.props-table td{border-bottom:1px solid var(--line);padding:3px 8px;text-align:left;white-space:nowrap}
+.props-table .row-name{color:var(--text)}
+.src-input{max-width:340px;padding:3px 8px;font-size:13px}
+.cost.ex-cost{color:#c9a6e8}
+.cost.stat-cost{color:#e8a6a6}
+.extra-cost{margin-top:6px;gap:6px 12px}
+.extra-cost .lvl-num{width:56px}
+.master-bar{background:#2c2238;border:1px solid #6b4f8a;border-radius:var(--radius);padding:10px 14px;margin-bottom:14px}
+.master-edit{border-left:3px solid #6b4f8a;padding-left:10px}
+.btn.master-btn{border-color:#6b4f8a;color:#d6b8f5}
 .tab .badge{display:inline-block;margin-left:5px;background:var(--panel2);border-radius:9px;padding:0 6px;font-size:11px;color:var(--gold)}
 
 main{max-width:1180px;margin:0 auto;padding:18px 16px 80px}
@@ -371,6 +398,9 @@ details.fold.section{margin:6px 0 14px}
 .mention{background:none;border:none;padding:0;font:inherit;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .mention-npc{color:#9fd0ff}
 .mention-loc{color:#a8dca0}
+.mention-self{color:#f0c987}
+.mention-book,.mention-arcane{color:#c9a6e8}
+.mention-item{color:#e8c39a}
 .mention-faction{color:#e0b4f0}
 .mention:hover{text-decoration-style:solid}
 
@@ -533,7 +563,7 @@ details.fold.section{margin:6px 0 14px}
 /* =====================================================================
    STATE — константы, справочники, состояние по умолчанию
    ===================================================================== */
-const APP_VERSION = 10;
+const APP_VERSION = 13;
 const STORAGE_KEY = 'gleb-mages-rpg-state';
 const BACKUP_KEY = 'gleb-mages-rpg-backups';
 const FILE_PREFIX = 'gleb-mages-rpg';
@@ -555,12 +585,16 @@ const FREE_SLOT_BASE = 0;
 const MANA_BASE = 50;
 const MANA_STATS = ['magicPower', 'magicDefense', 'magicSense'];
 
+// Максимум базового значения каждой из трёх характеристик магии
+const STAT_MAX = 500;
 const STAT_DEFS = [
   { key: 'maxMana', name: 'Максимальная мана', short: 'Макс. мана',
     get: () => MANA_BASE + MANA_STATS.reduce((t, k) => t + getTotal(k), 0), set: () => {} },
   { key: 'magicPower', name: 'Сила магии', allocatable: true, thresholds: true },
   { key: 'magicDefense', name: 'Защита от магии', allocatable: true, thresholds: true },
   { key: 'magicSense', name: 'Чувство магии', allocatable: true, thresholds: true },
+  // Запас открывается, когда одна из трёх характеристик дошла до максимума; без потолка; прикрывает траты характеристик
+  { key: 'reserve', name: 'Запас', allocatable: true, noMax: true },
   { key: 'heavyToDeath', name: 'Тяжёлых ран до смерти', short: 'Тяжёлых ран до смерти',
     get: () => WOUND_RULES.heavyToDeath, set: () => {} },
   { key: 'freeSlots', name: 'Ячеек свободного аффикса', short: 'Ячеек свободного аффикса',
@@ -686,20 +720,77 @@ const ELEMENT_SEED = [
 ];
 
 // Формы по умолчанию. Уровень владения и «изучена» игрок отмечает сам.
+// Формы — общий список мастера. У игрока меняются только «изучена» и источник; свои формы можно добавлять.
+// prev — предыдущая форма (для продвинутых форм)
 const FORM_SEED = [
-  { n: "Барьер", a: ["Заряд"] },
-  { n: "Копьё", a: ["Пробивание"] },
-  { n: "Стена", a: ["Укрепление"] },
-  { n: "Кнут", a: ["Управление"] },
-  { n: "Столб", a: ["Рост"] },
+  {"n":"Барьер","a":["Заряд"]},
+  {"n":"Стрела","d":"Небольшой стреловидный снаряд.","a":["Умножение"]},
+  {"n":"Копьё","prev":"Стрела","d":"Крупный стреловидный снаряд.","a":["Пробивание","Ускорение"]},
+  {"n":"Стена","d":"Создаёт плоскость примерно 2 на 2 метра, небольшой толщины.","a":["Укрепление"]},
+  {"n":"Форт","prev":"Стена","d":"Поднимает стену вокруг мага — 4 стены.","a":["Укрепление","Ускорение"]},
+  {"n":"Столб","d":"Конусообразная материя, растущая с условного низа вверх с постоянной скоростью. Можно поддерживать, тратит ману экспоненциально.","a":["Рост"]},
+  {"n":"Ускоренный столб","prev":"Столб","a":["Рост","Ускорение"]},
+  {"n":"Власть","prev":"Столб","d":"Маг создаёт толстый столб под целью, обычно под собой.","a":["Рост","Укрепление"]},
+  {"n":"Шар","d":"Снаряд концентрированной энергии, летящий по прямой от движения мага; взрывается в конце.","a":["Взрыв"]},
+  {"n":"Мортира","prev":"Шар","d":"Это шар, но летящий по дуге.","a":["Взрыв","Управление"]},
+  {"n":"Покров","d":"Маг покрывает своё или чужое тело элементом для получения защиты или обездвиживания.\nПокрыть другого мага стихией можно только при доминации этой стихии.","a":["Управление"]},
+  {"n":"Доспех","prev":"Покров","d":"Маг покрывает себя толстыми пластинами элемента. Между пластинами есть зазор, но они намного плотнее покрова.","a":["Укрепление","Управление"]},
+  {"n":"Аватар","prev":"Доспех","d":"Могучий доспех из стихии полностью покрывает владельца. Каменный аватар поднимает вас выше, а бесплотный возвышается над вами, пряча вас в потоке энергии.","a":["Заряд","Укрепление","Управление"]},
+  {"n":"Нова","d":"Взрыв стихии вокруг мага, имеет сниженный урон.","a":["Ускорение"]},
+  {"n":"Звезда","prev":"Нова","d":"Создаёт сгусток энергии в пространстве, после чего он взрывается. Имеет задержку 1 ход (3 Ускорения отменяют задержку).\nКонцентрация может дать увеличение, можно растить.","a":["Взрыв","Рост"]},
+  {"n":"Комета","prev":"Звезда","d":"Формирует звезду в воздухе 1 ход, затем обрушивает её сверху на врагов (с 3 Ускорениями формируется за 1 ход).\nКонцентрация может дать увеличение, можно растить.","a":["Взрыв","Рост","Управление"]},
+  {"n":"Кнут","d":"Сложенная в линию энергия движется гибкой цепью, позволяя ей огибать препятствия и хватать объекты.","a":["Управление"]},
+  {"n":"Коса","d":"Довольно крупный всплеск энергии, не летящий далеко вперёд, а следующий за движением руки.","a":["Острота","Ускорение"]},
+  {"n":"Истукан","d":"Грубое изваяние гуманоида.","a":["Заряд","Управление"]},
+  {"n":"Конус","d":"Направленная веером стихия от мага в сторону.","a":["Рост"]},
+  {"n":"Луч","d":"Направленная вдаль прямой линией энергия от мага к цели.","a":["Ускорение"]},
 ];
 
 // Описания аффиксов по умолчанию
 const AFFIX_DESCRIPTIONS = {
   "Укрепление": "Замедляет заклинание.\nТри Укрепления замедляют вдвое.",
   "Избирательный": "Не попадает по своим.",
-  "Ласковый": "Пацифистичный: не наносит урон по своим.",
+  "Ласковый": "Не наносит урон по своим.",
 };
+// Аффиксы мастера без описаний (пока)
+const EXTRA_AFFIXES = ['Живой', 'Поиск', 'Разделение', 'Разлагающий', 'Раскалённый', 'Мягкий', 'Размытие', 'Токсичный'];
+
+// Тайные школы и их заклинания — общий список мастера. У игрока: «изучено», счётчик, заметки, картинка.
+const ARCANE_SCHOOLS = [['teleport', 'Телепортация'], ['transform', 'Трансформация'], ['creation', 'Созидание'], ['negation', 'Отрицание'], ['mind', 'Разум']];
+// n — название, aka — старые написания (для узнавания в сохранениях), lvl — уровень, cost — мана, ex — истощение,
+// st — постоянная трата характеристик { magicPower: n, … }, tags — метки, x — примечание мастера, d — описание
+// Свойства заклинаний — справочник мастера. coef — коэффициент свойства (пока у всех 1).
+const PROP_SEED = [
+  { id: 'area', n: 'Область', coef: 1 },
+  { id: 'range', n: 'Дальность', coef: 1 },
+  { id: 'damage', n: 'Урон', coef: 1 },
+  { id: 'defense', n: 'Защита', coef: 1 },
+  { id: 'absorb', n: 'Поглощение', coef: 1 },
+];
+// Значения, закреплённые мастером (у всех одинаковые, 🔒). Незакреплённые игрок заполняет сам.
+// Ступени: «стихия|ступень» → { свойство: число }; у форм — в FORM_SEED (p: { свойство: true/false });
+// аффиксы: «название» → { свойство: '50%' }; тайные школы: id → { свойство: число } (на будущее).
+const STAGE_PROPS = {};
+const AFFIX_PROPS = {};
+const SCHOOL_PROPS = {};
+
+const ARCANE_SEED = [
+  {"school":"transform","n":"Двойник","lvl":"Фундаментальный","cost":100,"tags":["Истощение","Трансформация","Клон"],"d":"Создание дубликата, максимум 1 дубликат. Он делит с магом один разум.\nОбычно создание клона доступно 1 раз в (день).\nПовторное использование за короткий срок даёт 3 единицы истощения."},
+  {"school":"transform","n":"Мутация (касание)","lvl":"Повышенная","cost":80,"tags":["Мутация"],"x":"Ранее запретная техника. Заставляет кидать кубики за каждую опухоль.","d":"Боевая техника создаёт мутацию при касании рукой или органическим оружием.\nМутация — это эффект, который поражает плоть атакованного. На базовом уровне требует касания тела цели напрямую или через органического посредника, например меча из железного дерева.\nЭффект мутации чаще всего отрицательный — опухоль.\nОпухоль занимает здоровье цели: малая = лёгкое ранение, средняя = среднее ранение, обширная = тяжёлое ранение.\nОбладатель опухоли кидает кубики каждый ход, по кубику за каждую опухоль:\n6 — опухоль уменьшается;\n5 — опухоль стагнирует;\n4 — опухоль болит (может сбить концентрацию);\n3 — опухоль мутирует (накладывает 1 истощение);\n2 — опухоль делится (снижает ранг и делится на 2 опухоли меньше; если делиться некуда, то просто удваивается);\n1 — опухоль растёт (повышает ранг)."},
+  {"school":"transform","n":"Аспект краба — клешня","aka":["Аспект краба - Клешня"],"lvl":"Ученик","cost":60,"tags":["Преображение"],"x":"Уязвимость к огню, краснеет.","d":"Маг выращивает себе мощную клешню на руке. Клешня покрыта панцирем и может блокировать многие атаки. Повышает защиту обладателя от физического урона и позволяет применять клешню.\nКлешня вдвое длиннее руки человека.\nОчень сильное сжатие.\nПолученный клешнёй урон не передаётся магу."},
+  {"school":"transform","n":"Аспект спрута — щупальца","aka":["Аспект спрута - щупальца"],"lvl":"Продвинутый","cost":60,"tags":["Преображение","Биотехника"],"d":"Создаёт тентакли из спины — это крепкие мускулистые органы. Атаки по ним не наносят урон магу, но рубят щупальца.\nСильное сжатие, ускорение плавания и карабкания, можно метать чернила."},
+  {"school":"transform","n":"Мана-мышцы","aka":["Манна мышици"],"lvl":"Ученик","cost":30,"tags":["Усиление","Истощение","Трата в ход"],"d":"Значительно повышает силу — на 500% — и вес — на 200%. Тратит 30 маны каждый ход.\nУвеличивает физическое сопротивление, силу удара, прыжка и т. д.\nДаёт 1 единицу истощения каждые 3 хода."},
+  {"school":"transform","n":"Чудовищный метаболизм","lvl":"Ученик","cost":100,"tags":["Трансформация","Исцеление","Истощение"],"d":"Восстанавливает 1 среднее здоровье в ход, длится 6 ходов.\nНе восстанавливает здоровье, удержанное травмами, аномалиями, истощением и мутациями.\nДаёт 1 единицу истощения по окончании действия."},
+  {"school":"transform","n":"Аспект саламандры — кожа","aka":["Аспект саламандры - кожа"],"lvl":"Ученик","cost":60,"tags":["Преображение","Трансформация","Огонь","Биотехника"],"d":"Маг покрывает свою кожу чешуёй саламандры и меняет принцип термодинамики в теле, немного повышая броню и значительно увеличивая сопротивление огню — на 50% и +20% к максимуму. Но даёт уязвимость к холоду 20%.\nВся огненная магия мага получает аффикс «Управление», что увеличивает отзывчивость огня."},
+  {"school":"transform","n":"Аспект богомола — клешня","aka":["Аспект богомола - клешня"],"lvl":"","cost":60,"tags":["Преображение","Биотехника","Насекомое"],"d":"Маг создаёт конечность — клинок богомола. Длинная рука с эффектом остроты и скорости имеет значительный урон и 2 атаки: «Рывок богомола» — быстрая атака и «Ловушка богомола» — захват.\nПолученные рукой повреждения не передаются магу."},
+  {"school":"transform","n":"Аспект гончей — ноги","aka":["Аспект гончей - ноги"],"lvl":"Ученик","cost":60,"tags":["Преображение","Биотехника"],"d":"Заменяет свои ноги на мощные лапы тельской гончей, что позволяет очень быстро бегать, почти не тратя выносливость. Немного увеличивает высоту прыжка, а в сочетании с «Мана-мышцами» — сильно."},
+  {"school":"transform","n":"Аспект летучей мыши — эхолокация","aka":["Аспект летучей мыши - эхолокация"],"lvl":"","cost":60,"tags":["Преображение","Биотехника"],"d":"Создаёт себе уши летучей мыши: маг может слышать пространство и использовать эхолот."},
+  {"school":"transform","n":"Аспект стрекозы — глаза","aka":["Аспект стрекозы - глаза"],"lvl":"Продвинутый","cost":100,"tags":["Преображение","Биотехника"],"d":"Фасетчатые глаза со зрением на 360 градусов и повышенной реакцией. Выглядит мерзко, но даёт невероятный угол обзора."},
+  {"school":"transform","n":"Аспект лягушки — яд","aka":["Аспект лягушки - яд"],"lvl":"Ученик","cost":100,"tags":["Преображение","Яд","Биотехника","Истощение","Аффикс"],"d":"Маг преображает своё тело и начинает выделять яд. Чем больше в нём было токсина, тем сильнее его яд; при этом тело очищается от токсинов, а яд можно использовать с магией воды (магия воды получает аффикс «Токсичный»).\nЕсли техника снимает 1 тяжёлый токсин, то даёт 1 истощение."},
+];
+
+// Сравнение названий без учёта регистра, «ё» и вида тире
+function normName(v) { return String(v || '').trim().toLowerCase().replace(/ё/g, 'е').replace(/[\s\-—–]+/g, ' '); }
 
 // Множители стоимости маны по ступеням — правило игры, берутся только отсюда (ключ «стихия|ступень»)
 const STAGE_MULTIPLIERS = new Map(ELEMENT_SEED.flatMap(e => e.stages.filter(st => st.m != null).map(st => [e.id + '|' + st.n, st.m])));
@@ -749,7 +840,7 @@ function buildDefaultMagic() {
   });
   for (const [name, text] of Object.entries(AFFIX_DESCRIPTIONS)) affix(name).description = text;
   affixes.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-  return { elements, forms, affixes };
+  return { elements, forms, affixes, stageProps: {} };
 }
 
 function defaultState() {
@@ -758,17 +849,22 @@ function defaultState() {
     character: {
       name: '',
       title: '',
+      id: uid('pc'),
+      player: '',
       portrait: '',
       bio: '',
       mana: { current: MANA_BASE },
       gold: 0,
-      stats: { magicPower: 0, magicDefense: 0, magicSense: 0 },
+      stats: { magicPower: 0, magicDefense: 0, magicSense: 0, reserve: 0 },
+      arcaneSchools: [],
+      tempArmor: [],
       freeStatPoints: 50,
       statThresholds: [],
       health: {
         light: { items: [] },
         medium: { items: [] },
         heavy: { items: [] },
+        exhaustion: 0,
       },
     },
     disciplines: [{
@@ -787,6 +883,7 @@ function defaultState() {
     quests: [],
     chronicle: [],
     combos: [],
+    schoolProps: {},
     notDuplicates: [],
     dice: { history: [], presets: [] },
     ui: { tab: 'character', lastTab: {} },
@@ -919,6 +1016,59 @@ const MIGRATIONS = {
     s.version = 10;
     return s;
   },
+  // v12 → v13: аффикс снова называется «Ласковый» (если были «Пацифизм» и «Ласковый» — сливаются в один)
+  12: s => {
+    const affs = s.elementalMagic?.affixes || [];
+    const same = affs.filter(x => ['ласковый', 'пацифизм'].includes(normName(x.name)));
+    if (same.length) {
+      const keepId = same[0].id;
+      let json = JSON.stringify(s);
+      for (const x of same.slice(1)) json = json.split(x.id).join(keepId);
+      s = JSON.parse(json);
+      const all = s.elementalMagic.affixes, dups = all.filter(x => x.id === keepId), keep = dups[0];
+      for (const x of dups.slice(1)) { keep.links = [...(keep.links || []), ...(x.links || [])]; if (!keep.description?.trim()) keep.description = x.description; }
+      s.elementalMagic.affixes = all.filter(x => x.id !== keepId || x === keep);
+      keep.links = keep.links.filter((l, i, arr) => l.type !== 'free' || arr.findIndex(y => y.type === 'free') === i);
+      keep.name = 'Ласковый';
+    }
+    s.version = 13;
+    return s;
+  },
+  // v11 → v12: открытые тайные школы — по уже изученным заклинаниям школ
+  11: s => {
+    const open = (s.character.arcaneSchools ||= []);
+    for (const sp of s.arcaneSpells || []) {
+      if (!sp.learned) continue;
+      const sd = ARCANE_SEED.find(x => [x.n, ...(x.aka || [])].some(n => normName(n) === normName(sp.name)));
+      if (sd && !open.includes(sd.school)) open.push(sd.school);
+    }
+    s.version = 12;
+    return s;
+  },
+  // v10 → v11: аффикс «Ласковый» переименован в «Пацифизм» (если были оба — сливаются в один)
+  10: s => {
+    const OLD_TEXT = 'Пацифистичный: не наносит урон по своим.';
+    const affs = s.elementalMagic?.affixes || [];
+    const same = affs.filter(x => ['ласковый', 'пацифизм'].includes(normName(x.name)));
+    if (same.length) {
+      // все найденные сливаются в первый: ссылки на их id в заклинаниях и эффектах переводятся на него
+      const keepId = same[0].id;
+      let json = JSON.stringify(s);
+      for (const x of same.slice(1)) json = json.split(x.id).join(keepId);
+      s = JSON.parse(json);
+      const all = s.elementalMagic.affixes, dups = all.filter(x => x.id === keepId), keep = dups[0];
+      for (const x of dups.slice(1)) {
+        keep.links = [...(keep.links || []), ...(x.links || [])];
+        if (!keep.description?.trim() || keep.description === OLD_TEXT) keep.description = x.description || keep.description;
+      }
+      s.elementalMagic.affixes = all.filter(x => x.id !== keepId || x === keep);
+      keep.links = keep.links.filter((l, i, arr) => l.type !== 'free' || arr.findIndex(y => y.type === 'free') === i);
+      keep.name = 'Пацифизм';
+      if (!keep.description?.trim() || keep.description === OLD_TEXT) keep.description = 'Не наносит урон по своим.';
+    }
+    s.version = 11;
+    return s;
+  },
 };
 
 function migrate(s) {
@@ -970,6 +1120,66 @@ function syncStagesFromSeed(s) {
   }
 }
 
+// Аффикс по названию из правил: находит (без учёта регистра и «ё») или создаёт
+function seedAffix(em, name) {
+  let a = em.affixes.find(x => normName(x.name) === normName(name));
+  if (!a) { a = { id: uid('affix'), name, description: '', requirements: '', notes: '', links: [] }; em.affixes.push(a); }
+  else a.name = name;
+  a.links ||= [];
+  return a;
+}
+function ensureSeedAffixes(s) {
+  const em = s.elementalMagic;
+  for (const name of [...Object.keys(AFFIX_DESCRIPTIONS), ...EXTRA_AFFIXES]) {
+    const a = seedAffix(em, name);
+    if (AFFIX_DESCRIPTIONS[name] && !a.description?.trim()) a.description = AFFIX_DESCRIPTIONS[name];
+  }
+}
+
+// Формы из FORM_SEED: описание, предыдущая форма и аффиксы — из страницы; от сохранения — id, «изучена», источник.
+// Старые названия вида «Копье Продвинутая форма стрелы» узнаются по первой части.
+const formKey = n => normName(n).replace(/ (продвинутая|высшая) форма.*$/, '');
+function syncFormsFromSeed(s) {
+  const em = s.elementalMagic;
+  const byKey = new Map();
+  for (const f of em.forms) if (!byKey.has(formKey(f.name))) byKey.set(formKey(f.name), f);
+  const idByName = {}, seeded = [];
+  for (const sd of FORM_SEED) {
+    let f = byKey.get(formKey(sd.n));
+    if (!f) { f = { id: uid('form'), known: false, source: '' }; em.forms.push(f); }
+    Object.assign(f, { name: sd.n, description: sd.d || '', sys: true });
+    idByName[sd.n] = f.id;
+    seeded.push(f);
+  }
+  FORM_SEED.forEach((sd, i) => { seeded[i].prevId = sd.prev ? idByName[sd.prev] || null : null; });
+  const sysIds = new Set(seeded.map(f => f.id));
+  const own = em.forms.filter(f => !sysIds.has(f.id));
+  for (const f of own) { delete f.sys; f.prevId ??= null; }
+  for (const a of em.affixes) a.links = (a.links || []).filter(l => !(l.type === 'form' && sysIds.has(l.targetId)));
+  for (const sd of FORM_SEED) for (const an of sd.a || []) seedAffix(em, an).links.push({ id: uid('link'), type: 'form', targetId: idByName[sd.n] });
+  em.forms = [...seeded, ...own];
+}
+
+// Тайные заклинания школ из ARCANE_SEED; от сохранения — id, «изучено», счётчик, заметки, картинка
+function syncArcaneFromSeed(s) {
+  const list = s.arcaneSpells, taken = new Set();
+  for (const sd of ARCANE_SEED) {
+    const keys = [sd.n, ...(sd.aka || [])].map(normName);
+    let sp = list.find(x => !taken.has(x.id) && keys.includes(normName(x.name)));
+    if (!sp) { sp = { id: uid('arc'), learned: false, uses: 0, notes: '', image: '' }; list.push(sp); }
+    else if (!('learned' in sp)) {
+      // было своим заклинанием с таким же названием — значит, изучено; заметки-метки мастера не дублируем
+      sp.learned = true;
+      if (!s.character.arcaneSchools.includes(sd.school)) s.character.arcaneSchools.push(sd.school);
+      if (normName(sp.notes).replace(/,/g, '') === normName((sd.tags || []).join(' '))) sp.notes = '';
+    }
+    taken.add(sp.id);
+    Object.assign(sp, { sys: true, name: sd.n, school: sd.school, level: sd.lvl || '', manaCost: sd.cost || 0, exhaustCost: sd.ex || 0, statCost: { ...(sd.st || {}) },
+      description: sd.d || '', extra: sd.x || '', tags: sd.tags || [] });
+  }
+  for (const sp of list) if (!taken.has(sp.id)) { delete sp.sys; delete sp.extra; delete sp.learned; sp.school ??= ''; }
+}
+
 function normalize(s) {
   const d = defaultState();
   // ранения из старого формата (только число) — до fillMissing, иначе подставится пустой список
@@ -980,6 +1190,9 @@ function normalize(s) {
   }
   fillMissing(s, d);
   syncStagesFromSeed(s);
+  syncFormsFromSeed(s);
+  ensureSeedAffixes(s);
+  syncArcaneFromSeed(s);
   const em = s.elementalMagic;
   for (const de of d.elementalMagic.elements)
     if (!em.elements.some(e => e.id === de.id)) em.elements.push({ ...de, stages: [] });
@@ -1028,7 +1241,7 @@ const store = {
 
 function loadState() {
   const raw = store.get(STORAGE_KEY);
-  if (!raw) return defaultState();
+  if (!raw) return normalize(defaultState());
   try {
     const data = JSON.parse(raw);
     if (typeof data.version !== 'number') throw new Error('нет поля version');
@@ -1037,7 +1250,7 @@ function loadState() {
     console.error(e);
     store.set(STORAGE_KEY + '-broken-' + Date.now(), raw);
     setTimeout(() => toast('Сохранение повреждено, загружены данные по умолчанию. Старые данные сохранены отдельно.', 'error'), 300);
-    return defaultState();
+    return normalize(defaultState());
   }
 }
 
@@ -1045,10 +1258,16 @@ let saveTimer = null;
 // Что пишется в сохранение и экспорт: ступени стихий — только id, название и отметка «открыта» (остальное — правила из страницы)
 function serializeState(pretty) {
   const em = state.elementalMagic;
+  const sysForms = new Set(em.forms.filter(f => f.sys).map(f => f.id));
   const slim = { ...state, elementalMagic: { ...em,
     elements: em.elements.map(el => ({ ...el, stages: el.stages.map(st => ({ id: st.id, name: st.name, unlocked: !!st.unlocked })) })),
-    // связи «аффикс — ступень» тоже из правил: при открытии собираются заново
-    affixes: em.affixes.map(a => ({ ...a, links: (a.links || []).filter(l => l.type !== 'stage') })) } };
+    // общие формы: только «изучена» и источник
+    forms: em.forms.map(f => f.sys ? { id: f.id, name: f.name, known: !!f.known, source: f.source || '', props: f.props || {} } : f),
+    // связи «аффикс — ступень» и «аффикс — общая форма» тоже из правил: при открытии собираются заново
+    affixes: em.affixes.map(a => ({ ...a, links: (a.links || []).filter(l => l.type !== 'stage' && !(l.type === 'form' && sysForms.has(l.targetId))) })) },
+    // заклинания школ: только личные отметки
+    arcaneSpells: state.arcaneSpells.map(sp => sp.sys
+      ? { id: sp.id, name: sp.name, learned: !!sp.learned, uses: sp.uses || 0, notes: sp.notes || '', image: sp.image || '' } : sp) };
   return pretty ? JSON.stringify(slim, null, 2) : JSON.stringify(slim);
 }
 
@@ -1119,11 +1338,48 @@ function replaceState(data, label) {
   saveState();
   render();
 }
+/* ---------- визитка персонажа ---------- */
+const CARD_KIND = FILE_PREFIX + '-card';
+function exportCard() {
+  const c = state.character;
+  if (!c.name?.trim()) { toast('Сначала впиши имя персонажа', 'error'); return; }
+  const card = { kind: CARD_KIND, cardVersion: 1, id: c.id, name: c.name.trim(), title: c.title || '', bio: c.bio || '',
+    portrait: c.portrait || '', player: c.player || '', date: new Date().toISOString() };
+  const slug = card.name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
+  downloadText(JSON.stringify(card, null, 2), `${FILE_PREFIX}-card-${slug}-${dateStamp()}.json`);
+}
+// Визитка другого игрока → карточка «персонаж игрока» (та же — обновляется, свои заметки о нём остаются)
+function importCard(card) {
+  if (card.id === state.character.id) { toast('Это визитка твоего собственного персонажа', 'error'); return; }
+  let n = state.npcs.find(x => x.id === card.id);
+  const fresh = !n;
+  if (fresh) { n = { ...newNpc('pc', card.name), id: card.id }; state.npcs.push(n); }
+  Object.assign(n, { kind: 'pc', name: card.name || n.name, short: card.title || '', bio: card.bio || '', image: card.portrait || n.image || '', player: card.player || '' });
+  commit();
+  goToNpc(n.id);
+  toast(fresh ? `Добавлен персонаж игрока «${n.name}»` : `Карточка «${n.name}» обновлена`, 'ok');
+}
+function cardInput() {
+  const input = h('input', { type: 'file', accept: '.json,application/json', style: 'display:none', onchange: e => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    f.text().then(t => {
+      let d;
+      try { d = JSON.parse(t); } catch { toast('Файл не является корректным JSON', 'error'); return; }
+      if (d?.kind !== CARD_KIND) { toast('Это не визитка персонажа', 'error'); return; }
+      importCard(d);
+    });
+  } });
+  return [btn('🪪 Загрузить визитку', () => input.click(), '', false, 'Файл-визитка другого игрока: его персонаж появится здесь'), input];
+}
+
 function importJSONFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
     let data;
     try { data = JSON.parse(reader.result); } catch (e) { toast('Файл не является корректным JSON', 'error'); return; }
+    if (data?.kind === CARD_KIND) { importCard(data); return; }
     if (!isPlain(data) || typeof data.version !== 'number') { toast('В файле нет поля version — это не сохранение листа', 'error'); return; }
     if (!confirm(`Заменить текущие данные содержимым файла «${file.name}»?\nТекущее состояние будет сохранено в резервную копию.`)) return;
     try {
@@ -1200,9 +1456,16 @@ function adjGold(d) {
   commit();
 }
 
+const capOf = key => statDef(key)?.noMax ? Infinity : STAT_MAX;
+// Запас открывается навсегда, как только одна из характеристик дошла до максимума (траты потом его не закрывают)
+function reserveOpen() {
+  const c = state.character;
+  if (!c.reserveOpened && MANA_STATS.some(k => getBase(k) >= STAT_MAX)) c.reserveOpened = true;
+  return !!c.reserveOpened || getBase('reserve') > 0;
+}
 const pendingTotal = () => Object.values(ui.pending).reduce((a, b) => a + b, 0);
 function applyPending() {
-  for (const [k, p] of Object.entries(ui.pending)) setBase(k, getBase(k) + p);
+  for (const [k, p] of Object.entries(ui.pending)) setBase(k, Math.min(capOf(k), getBase(k) + p));
   state.character.freeStatPoints -= pendingTotal();
   ui.pending = {};
   commit();
@@ -1385,7 +1648,7 @@ const partByKey = k => spellParts().find(p => p.key === k);
 
 function emptyDraft() {
   return { elementId: null, stageId: null, formId: null, freeAffixId: null, image: '',
-    name: '', manaCost: 0, description: '', notes: '' };
+    name: '', manaCost: 0, exhaustCost: 0, statCost: {}, description: '', notes: '' };
 }
 
 function resetDependents(obj, changedKey) {
@@ -1557,19 +1820,264 @@ const reqText = reqs => (reqs || []).map(q => `${affName(q.affixId) || '?'} ×${
 const missingText = list => list.map(m => `${affName(m.affixId) || '?'} ×${m.n}`).join(', ');
 const consumeText = list => list.map(s => affName(s.affixId)).join(', ');
 
-function castSpell(spell) {
-  const cost = spellCost(spell);
+// Истощение за применение (у тайных — из списка школы или своё, у стихийных — указывается вручную)
+const spellExhaust = s => Math.max(0, Number(s.exhaustCost) || 0);
+// Постоянная трата характеристик: { magicPower: n, … } — только ненулевые
+const STAT_SHORT = { magicPower: 'Сила', magicDefense: 'Защита', magicSense: 'Чувство' };
+const statCostOf = s => Object.fromEntries(MANA_STATS.map(k => [k, Math.max(0, Number(s.statCost?.[k]) || 0)]).filter(([, v]) => v));
+const statCostText = st => Object.entries(st).map(([k, v]) => `${v} ${STAT_SHORT[k]}`).join(', ');
+const castLabel = (cost, ex, icon = '✦ Применить', st = {}) =>
+  `${icon} (−${cost}${ex ? ' · +' + ex + ' 💤' : ''}${Object.keys(st).length ? ' · −' + statCostText(st) : ''})`;
+const exChip = ex => ex ? h('span', { class: 'cost ex-cost', title: 'Истощение за применение' }, '💤 ' + ex) : null;
+const statChips = st => Object.entries(st).map(([k, v]) => h('span', { class: 'cost stat-cost', title: 'Постоянная трата характеристики (сначала из Запаса)' }, `−${v} ${STAT_SHORT[k]}`));
+
+// Строка «кроме маны тратит»: истощение и характеристики — в конструкторе, книге и тайной магии
+function extraCostRow(obj, onChange = commit) {
+  obj.statCost ||= {};
+  return h('div', { class: 'row small extra-cost' },
+    h('span', { class: 'muted' }, 'Кроме маны тратит:'),
+    h('label', { class: 'chk', title: 'Истощение за каждое применение' }, '💤 истощение', num(obj, 'exhaustCost', { min: 0, class: 'lvl-num', onChange })),
+    MANA_STATS.map(k => h('label', { class: 'chk', title: 'Постоянная трата: сначала из Запаса, потом из самой характеристики' },
+      statDef(k).name, num(obj.statCost, k, { min: 0, class: 'lvl-num', onChange }))));
+}
+
+// Как заплатить характеристиками: сначала Запас (прежде всего там, где самой характеристики не хватает). null — не хватает.
+function statPayment(need) {
+  const res = { reserve: 0, stats: {} };
+  let left = getBase('reserve');
+  const keys = Object.keys(need);
+  for (const k of keys) {
+    const lack = Math.max(0, need[k] - getBase(k)), take = Math.min(left, lack);
+    if (lack > take) return null;
+    res.stats[k] = need[k] - take; left -= take; res.reserve += take;
+  }
+  for (const k of keys) { const take = Math.min(left, res.stats[k]); res.stats[k] -= take; left -= take; res.reserve += take; }
+  return res;
+}
+
+// Списывает всё сразу: ману, истощение и характеристики. Характеристики — навсегда, поэтому спрашиваем.
+function payCost(name, mana, ex, st) {
   const m = state.character.mana;
-  if (m.current < cost) { toast('Недостаточно маны', 'error'); return; }
-  m.current -= cost;
+  if (m.current < mana) { toast('Недостаточно маны', 'error'); return false; }
+  const pay = statPayment(st);
+  if (!pay) { toast('Не хватает характеристик (с учётом Запаса)', 'error'); return false; }
+  if (!confirmDeadlyExhaustion(ex)) return false;
+  if (Object.keys(st).length && !confirm(`«${name}» навсегда тратит: ${statCostText(st)}.` +
+    (pay.reserve ? `\nИз Запаса: ${pay.reserve}` + (Object.values(pay.stats).some(v => v) ? `, из характеристик: ${statCostText(Object.fromEntries(Object.entries(pay.stats).filter(([, v]) => v)))}` : '') + '.' : '') +
+    '\nПрименить?')) return false;
+  m.current -= mana;
+  for (const [k, v] of Object.entries(pay.stats)) if (v) setBase(k, getBase(k) - v);
+  if (pay.reserve) setBase('reserve', getBase('reserve') - pay.reserve);
+  if (ex) HP().exhaustion = exhaustion() + ex;
+  return true;
+}
+function paidToast(name, mana, ex, st) {
+  toast(`${name}: −${mana} маны${ex ? `, +${ex} истощения` : ''}${Object.keys(st).length ? ', −' + statCostText(st) : ''}`, 'ok');
+  if (ex && hits() <= 0) toast('☠ Хиты закончились — это смерть', 'error');
+}
+
+/* ---------- свойства заклинаний ---------- */
+const PROPS = () => PROP_SEED;
+const round2 = x => Math.round(x * 100) / 100;
+// «50%», «+50 %», «0.5», «0,5» — одно и то же (0.5). Пусто — null, не число — NaN.
+function parseFrac(raw) {
+  const t = String(raw ?? '').trim().replace(/\s+/g, '').replace(',', '.');
+  if (!t) return null;
+  const pct = t.endsWith('%'), n = Number(pct ? t.slice(0, -1) : t);
+  return isFinite(n) ? (pct ? n / 100 : n) : NaN;
+}
+const fmtPct = f => (f >= 0 ? '+' : '−') + round2(Math.abs(f) * 100) + '%';
+function parseNumOrNull(raw) {
+  const t = String(raw ?? '').trim().replace(',', '.');
+  if (!t) return null;
+  const n = Number(t);
+  if (!isFinite(n)) { toast(`«${raw}» — не число`, 'error'); return undefined; }
+  return n;
+}
+const isNum = v => typeof v === 'number' && isFinite(v);
+const stageKey = (el, st) => el.id + '|' + st.name;
+const stagePropSys = (el, st, pid) => STAGE_PROPS[stageKey(el, st)]?.[pid];
+const stagePropUser = (el, st, pid) => EM().stageProps?.[stageKey(el, st)]?.[pid];
+const stageProp = (el, st, pid) => isNum(stagePropSys(el, st, pid)) ? stagePropSys(el, st, pid) : stagePropUser(el, st, pid);
+const formSeedOf = f => f.sys ? FORM_SEED.find(x => x.n === f.name) : null;
+const formPropSys = (f, pid) => formSeedOf(f)?.p?.[pid];
+const formHasProp = (f, pid) => typeof formPropSys(f, pid) === 'boolean' ? formPropSys(f, pid) : !!f.props?.[pid];
+const affixPropSys = (a, pid) => AFFIX_PROPS[a.name]?.[pid];
+const affixPropRaw = (a, pid) => { const v = affixPropSys(a, pid); return v != null && String(v).trim() !== '' ? v : a.props?.[pid]; };
+// Записать значение в объект по двум ключам; пустое — удалить
+function setDeep(obj, k1, k2, v) {
+  if (v == null || v === '') { if (obj[k1]) { delete obj[k1][k2]; if (!Object.keys(obj[k1]).length) delete obj[k1]; } }
+  else (obj[k1] ||= {})[k2] = v;
+}
+
+// Свойства стихийного заклинания: отмечены у формы и есть число у (итоговой) ступени.
+// Значение = число ступени × коэффициент × (100% + сумма процентов всех аффиксов, кроме потраченных)
+function spellPropsCalc(obj) {
+  const r = findStage(obj.stageId), f = findForm(obj.formId);
+  if (!r || !f) return [];
+  const affs = [...elementAffixesOf(obj), ...formAffixesOf(obj), ...freeKeys().map(k => obj[k]).filter(Boolean)];
+  return PROPS().filter(p => formHasProp(f, p.id) && isNum(stageProp(r.el, r.st, p.id))).map(p => {
+    let sum = 0;
+    const parts = [];
+    for (const id of affs) {
+      const a = findAffix(id), v = a ? parseFrac(affixPropRaw(a, p.id)) : null;
+      if (v != null && isFinite(v)) { sum += v; parts.push({ name: a.name, v }); }
+    }
+    const base = stageProp(r.el, r.st, p.id), coef = Number(p.coef ?? 1);
+    const value = round2(base * coef * (1 + sum));
+    const manual = isNum(obj.propManual?.[p.id]) ? obj.propManual[p.id] : null;
+    return { p, base, coef, sum, parts, value, negative: sum < -1, manual, shown: manual ?? value };
+  });
+}
+const propTip = r => `${r.base} × ${r.coef} × (100%${r.parts.map(x => ' ' + fmtPct(x.v) + ' ' + x.name).join('')}) = ${r.value}` +
+  (r.manual != null ? `\nСвоё значение: ${r.manual}` : '') + (r.negative ? '\n⚠ Сумма процентов меньше −100%' : '');
+// Свойства в заклинании: просмотр или (editable) с «своим» значением
+// Ячейка числа: закреплённое мастером — 🔒 (правит только мастер); иначе — своё значение
+function propNumCell(sysVal, userVal, onUser, onSys) {
+  const locked = isNum(sysVal);
+  if (locked && !ui.master) return h('span', { class: 'prop-sys', title: 'Закреплено правилами мастера' }, '🔒 ' + sysVal);
+  return h('input', { class: 'prop-in' + (ui.master ? ' master' : ''), inputmode: 'decimal',
+    value: ui.master ? (sysVal ?? '') : (userVal ?? ''), placeholder: ui.master && isNum(userVal) ? String(userVal) : '—',
+    title: ui.master ? 'Режим мастера: закрепить значение для всех. Пусто — снять закрепление' : 'Своё значение (пока мастер не закрепил)',
+    onchange: e => { const v = parseNumOrNull(e.target.value); if (v !== undefined) (ui.master ? onSys : onUser)(v); } });
+}
+function propBoolCell(sysVal, userVal, onUser, onSys) {
+  const locked = typeof sysVal === 'boolean';
+  if (locked && !ui.master) return h('input', { type: 'checkbox', checked: sysVal, disabled: true, title: 'Закреплено правилами мастера' });
+  if (ui.master) return [h('input', { type: 'checkbox', class: 'master', checked: locked ? sysVal : !!userVal,
+      title: 'Режим мастера: закрепить для всех', onchange: e => onSys(e.target.checked) }),
+    locked ? h('button', { type: 'button', class: 'x', title: 'Снять закрепление', onclick: () => onSys(null) }, '↺') : null];
+  return h('input', { type: 'checkbox', checked: !!userVal, onchange: e => onUser(e.target.checked) });
+}
+// Галочки «свойство имеет смысл у формы»
+function formPropsRow(f) {
+  const sd = formSeedOf(f);
+  return h('div', { class: 'row small props-row' }, h('span', { class: 'muted' }, 'Свойства:'),
+    PROPS().map(p => h('label', { class: 'chk' + (formHasProp(f, p.id) ? ' on' : '') },
+      propBoolCell(formPropSys(f, p.id), f.props?.[p.id],
+        v => { f.props ||= {}; if (v) f.props[p.id] = true; else delete f.props[p.id]; commit(); },
+        v => { if (!sd) { toast('Своя форма — закреплять нечего', 'error'); return; } sd.p ||= {}; if (v == null) delete sd.p[p.id]; else sd.p[p.id] = v; resyncRules(); }),
+      ' ' + p.n)));
+}
+// Проценты аффикса по свойствам
+function affixPropChips(a) {
+  const list = PROPS().map(p => ({ p, raw: affixPropRaw(a, p.id) })).filter(x => x.raw != null && String(x.raw).trim() !== '');
+  return list.length ? h('div', { class: 'chips' }, list.map(({ p, raw }) => {
+    const v = parseFrac(raw);
+    return chip(`${p.n} ${isFinite(v) ? fmtPct(v) : '⚠ ' + raw}`, isFinite(v) ? 'mod' : 'locked', isFinite(v) ? null : 'Не число — в расчёте не участвует');
+  })) : null;
+}
+function affixPropsEditor(a) {
+  return h('div', { class: 'sub' },
+    h('div', { class: 'sub-title' }, 'Свойства: прибавка в процентах (50%, 0.5 и 0,5 — одно и то же)'),
+    h('div', { class: 'props-grid' }, PROPS().map(p => {
+      const sys = affixPropSys(a, p.id), locked = sys != null && String(sys).trim() !== '';
+      const raw = affixPropRaw(a, p.id), v = parseFrac(raw);
+      return h('label', { class: 'field' }, h('span', { class: 'lbl' }, p.n),
+        h('div', { class: 'row small' },
+          locked && !ui.master ? h('span', { class: 'prop-sys', title: 'Закреплено правилами мастера' }, '🔒 ' + sys)
+            : h('input', { class: 'prop-in' + (ui.master ? ' master' : ''), value: (ui.master ? sys : a.props?.[p.id]) ?? '', placeholder: '—',
+                onchange: e => {
+                  const t = e.target.value.trim();
+                  if (ui.master) { setDeep(AFFIX_PROPS, a.name, p.id, t || null); resyncRules(); }
+                  else { a.props ||= {}; if (t) a.props[p.id] = t; else delete a.props[p.id]; commit(); }
+                } }),
+          v == null ? null : isFinite(v) ? h('span', { class: 'muted' }, '= ' + fmtPct(v)) : h('span', { class: 'warn' }, 'не число')));
+    })));
+}
+// Числа ступени — значками в строке ступени
+function stagePropChips(el, st) {
+  const list = PROPS().filter(p => isNum(stageProp(el, st, p.id)));
+  return list.length ? h('div', { class: 'chips' }, list.map(p => chip(`${p.n} ${stageProp(el, st, p.id)}`, 'mod',
+    isNum(stagePropSys(el, st, p.id)) ? 'Закреплено правилами мастера' : 'Своё значение'))) : null;
+}
+// Таблица: строки × свойства
+function propsTable(rows) {
+  return h('div', { class: 'table-wrap' }, h('table', { class: 'props-table' },
+    h('thead', null, h('tr', null, h('th', null, ''), PROPS().map(p => h('th', null, p.n)))),
+    h('tbody', null, rows.map(r => h('tr', null, h('td', { class: 'row-name' }, r.name), PROPS().map(p => h('td', null, r.cell(p))))))));
+}
+function propsSection() {
+  const em = EM();
+  return h('div', null,
+    h('p', { class: 'hint' }, 'Свойство стихийного заклинания показывается, если оно отмечено у формы и у ступени есть число. ',
+      'Значение = число ступени × коэффициент свойства × (100% + сумма процентов всех аффиксов заклинания, кроме потраченных). ',
+      'Галочки форм — в карточках форм, проценты аффиксов — в редакторе аффикса. ',
+      'Всё, что мастер не закрепил (🔒), можно заполнять самой.'),
+    h('div', { class: 'chips' }, PROPS().map(p => chip(`${p.n} ×${p.coef ?? 1}`, 'affix', 'Коэффициент свойства'))),
+    ui.master ? masterPropsEditor() : null,
+    em.elements.map(el => fold('props-el-' + el.id, `${ELEMENT_ICON[el.id] || ''} ${el.name}: числа ступеней`,
+      propsTable(el.stages.map(st => ({ name: st.name, cell: p => propNumCell(stagePropSys(el, st, p.id), stagePropUser(el, st, p.id),
+        v => { setDeep(em.stageProps ||= {}, stageKey(el, st), p.id, v); commit(); },
+        v => { setDeep(STAGE_PROPS, stageKey(el, st), p.id, v); resyncRules(); }) }))))),
+    fold('props-schools', 'Тайные школы: числа (на будущее, в расчётах пока не участвуют)',
+      propsTable(ARCANE_SCHOOLS.map(([id, name]) => ({ name, cell: p => propNumCell(SCHOOL_PROPS[id]?.[p.id], state.schoolProps?.[id]?.[p.id],
+        v => { setDeep(state.schoolProps ||= {}, id, p.id, v); commit(); },
+        v => { setDeep(SCHOOL_PROPS, id, p.id, v); resyncRules(); }) })))));
+}
+// Режим мастера: справочник свойств
+function masterPropsEditor() {
+  return h('div', { class: 'form master-edit' },
+    PROP_SEED.map(p => h('div', { class: 'row small' },
+      ruleInput(p.n, v => { if (v.trim()) p.n = v.trim(); }),
+      h('span', { class: 'muted' }, 'коэффициент'),
+      ruleInput(p.coef ?? 1, v => { p.coef = Number(String(v).replace(',', '.')) || 0; }),
+      btn('✕', () => { if (confirm(`Убрать свойство «${p.n}» из справочника?`)) { PROP_SEED.splice(PROP_SEED.indexOf(p), 1); resyncRules(); } }, 'ghost danger small sq'))),
+    h('div', null, btn('🎓 + Свойство', () => { PROP_SEED.push({ id: uid('prop'), n: 'Новое свойство', coef: 1 }); resyncRules(); }, 'master-btn small')));
+}
+
+function propsView(obj, editable, onChange = commit) {
+  const rows = spellPropsCalc(obj);
+  if (!rows.length) return null;
+  return h('div', { class: 'props-line' }, rows.map(r => {
+    const label = h('span', { class: 'prop-chip' + (r.negative ? ' neg' : '') + (r.manual != null ? ' manual' : ''), title: propTip(r) },
+      `${r.p.n} ${r.shown}${r.manual != null ? ' ✎' : ''}${r.negative ? ' ⚠' : ''}`);
+    if (!editable) return label;
+    return h('span', { class: 'prop-edit' }, label,
+      h('label', { class: 'chk small', title: 'Своё значение вместо расчёта' },
+        h('input', { type: 'checkbox', checked: r.manual != null, onchange: e => {
+          obj.propManual ||= {};
+          if (e.target.checked) obj.propManual[r.p.id] = r.value; else delete obj.propManual[r.p.id];
+          onChange();
+        } }), 'своё'),
+      r.manual != null ? num(obj.propManual, r.p.id, { float: true, step: 'any', class: 'lvl-num', onChange }) : null);
+  }));
+}
+// Сумма процентов меньше −100% — предупреждаем (при применении и при закрытии редактирования)
+function warnNegative(obj) {
+  const neg = spellPropsCalc(obj).filter(r => r.negative);
+  if (neg.length) toast(`⚠ «${obj.name || autoSpellName(obj)}»: сумма процентов аффиксов меньше −100% — ` +
+    neg.map(r => `${r.p.n} ${fmtPct(r.sum)}`).join(', '), 'error');
+}
+// Свои свойства, которые не совпадают с расчётом
+function propMismatches() {
+  const out = [];
+  for (const sp of state.spellbook) for (const r of spellPropsCalc(sp)) if (r.manual != null && Math.abs(r.manual - r.value) > 1e-9) out.push({ sp, r });
+  return out;
+}
+// Временная броня от стихийного заклинания со свойством «Поглощение»: Земля — физическая, остальные стихии — магическая
+function addTempArmor(sp) {
+  const rows = spellPropsCalc(sp), ab = rows.find(r => r.p.id === 'absorb'), df = rows.find(r => r.p.id === 'defense');
+  if (!ab || !(ab.shown > 0)) return;
+  const type = sp.elementId === 'earth' ? 'phys' : 'magic', cells = Math.ceil(ab.shown);
+  (state.character.tempArmor ||= []).push({ id: uid('tarm'), name: sp.name || autoSpellName(sp), type, defense: df ? df.shown : 0, cells });
+  toast(`Временная ${type === 'phys' ? 'физическая' : 'магическая'} броня: ${cells} яч.`, 'ok');
+}
+
+function castSpell(spell) {
+  const cost = spellCost(spell), ex = spellExhaust(spell), st = statCostOf(spell), name = spell.name || 'Заклинание';
+  if (spell.stageId) warnNegative(spell);
+  if (!payCost(name, cost, ex, st)) return;
   spell.uses = (spell.uses || 0) + 1;
+  if (spell.stageId) addTempArmor(spell);
   commit();
-  toast(`${spell.name || 'Заклинание'}: −${cost} маны`, 'ok');
+  paidToast(name, cost, ex, st);
 }
 
 function saveDraftToBook() {
   const d = ui.draft;
   if (!spellParts().some(p => d[p.key])) { toast('Выбери хотя бы одну часть заклинания', 'error'); return; }
+  warnNegative(d);
   const spell = { id: uid('spell'), uses: 0, createdAt: new Date().toISOString(), ...JSON.parse(JSON.stringify(d)) };
   spell.name = d.name.trim() || autoSpellName(d);
   state.spellbook.push(spell);
@@ -1741,10 +2249,41 @@ const NAV = [
 ];
 const groupOf = tabId => NAV.find(g => g.tabs.includes(tabId)) || NAV[0];
 
+// Механика защиты — по посту мастера (тексты переписаны, орфография исправлена)
 function renderMartialTab(v) {
-  v.append(h('section', { class: 'panel' },
-    h('div', { class: 'panel-title' }, '⚔ Боевое искусство'),
-    h('p', { class: 'hint' }, 'Раздел в разработке: правила уточняются у мастера.')));
+  const p = (...kids) => h('p', null, ...kids), b = t => h('b', null, t);
+  v.append(
+    h('section', { class: 'panel' },
+      h('div', { class: 'panel-title' }, '🛡 Механика защиты'),
+      p('У брони два показателя. ', b('Защита'), ' — порог повреждений, который броня может заблокировать (качество брони). ',
+        b('Поглощение'), ' — сколько повреждений броня может принять на себя (здоровье брони). В листе Поглощение — это ячейки: ',
+        'одна ячейка поглощает одно тяжёлое повреждение.'),
+      h('div', { class: 'sub-title' }, '✨ Магическая броня'),
+      p('Есть у магов: связана с магической защитой их ментального тела. Первую единицу персонаж получает на 100 Защиты от магии, ',
+        'дальше — по одной на каждые следующие 100. Лист считает её сам.'),
+      p('Одна единица магической брони поглощает одно тяжёлое повреждение магией и даёт 1 магической защиты. ',
+        'Повреждения складываются по тяжести: три средних — одно тяжёлое.'),
+      p(b('Пример. '), 'У персонажа 1 единица магической брони. В него попадают 3 огненные стрелы — 3 средних повреждения огнём. ',
+        'Урон огнём — повреждение магией: три средних складываются в одно тяжёлое и полностью поглощаются. Брони остаётся 0.'),
+      p('Магическую броню увеличивают предметы, бонусы и благословения: например, «кольцо магического щита (+1)» даёт вторую единицу. ',
+        'Обычные люди получают магическую броню только от магических вещей или благословений.'),
+      p('При определённых значениях магическая броня защищает и от магических воздействий — нужное значение задаёт заклинание. ',
+        'Пример: у врага 1 единица магической защиты — каменный покров на нём не срабатывает. ',
+        'Маг телепортации пытается принудительно перенести врага с магической бронёй 1, проигрывает бросок — и не переносит.'),
+      p(b('Восстановление'), ' идёт быстрее, чем у здоровья, — в перерывах между сражениями. В Тэле магическая броня не восстанавливается. ',
+        'Медитация или сон восстанавливают её полностью, зелье духа — тоже полностью, хорошее зелье маны — 1 единицу.'),
+      h('div', { class: 'sub-title' }, '⛰ Физическая броня'),
+      p('Работает так же, но с показателями физической защиты. Магическая броня не блокирует физический урон, физическая — магический. ',
+        'Магия земли, льда и воздуха наносит физические повреждения: от них защищают каменная или ледяная броня, доспехи и барьеры.'),
+      p(b('Пример. '), 'Персонаж применяет каменный покров и получает 1 единицу физической защиты. В него попадают 3 каменные стрелы — ',
+        '3 средних повреждения. Они складываются в одно тяжёлое повреждение камнем, броня его полностью поглощает, покров рассыпается.'),
+      p('В физической защите правило сложения по тяжести действует не всегда: особые случаи оценивает ведущий.'),
+      h('div', { class: 'sub-title' }, 'В листе'),
+      p('Броня — блок на вкладке «Персонаж», между хитами и золотом. Потраченные ячейки отмечай галочками, округляя вверх. ',
+        'Броня предмета задаётся в инвентаре (вид, Защита, Поглощение) и появляется, пока предмет используется.')),
+    h('section', { class: 'panel' },
+      h('div', { class: 'panel-title' }, '⚔ Боевое искусство'),
+      h('p', { class: 'hint' }, 'Остальное в разработке: правила уточняются у мастера.')));
 }
 
 function goTab(id) {
@@ -1782,6 +2321,7 @@ function render() {
   const view = document.getElementById('view');
   const tab = TABS.find(t => t.id === state.ui.tab) || TABS[0];
   view.replaceChildren();
+  if (ui.master) view.append(masterBar());
   ui.mentionTargets = null;
   // append с разворачиванием массивов и пропуском пустых значений
   tab.render({ append: (...kids) => view.append(...kids.flat(Infinity).filter(k => k != null && k !== false)) });
@@ -1828,8 +2368,9 @@ function renderHeader() {
     healthMini(),
     h('div', { class: 'hdr-compact' },
       h('span', { class: 'hc-hp' + (hits() <= 0 ? ' dead' : '') }, `❤ ${Math.max(0, hits())}/${maxHits()}`),
-      WOUND_TYPES.some(t => HP()[t.key].items.length)
-        ? h('span', { class: 'hc-wounds' }, WOUND_TYPES.map(t => `${t.short} ${HP()[t.key].items.length}`).join(' · ')) : null,
+      WOUND_TYPES.some(t => HP()[t.key].items.length) || exhaustion()
+        ? h('span', { class: 'hc-wounds' }, [...WOUND_TYPES.map(t => `${t.short} ${HP()[t.key].items.length}`),
+            ...(exhaustion() ? ['💤 ' + exhaustion()] : [])].join(' · ')) : null,
       h('span', { class: 'hc-mana' }, `💧 ${m.current}/${maxMana()}`),
       h('span', { class: 'hc-gold' }, `💰 ${c.gold}`)),
     h('span', { id: 'saveDot', class: 'save-dot' + (saveTimer ? ' dirty' : ''), title: 'Автосохранение' }, '● сохранено'));
@@ -1874,10 +2415,13 @@ function renderCharacterTab(v) {
             field('Титул / роль', txt(c, 'title')),
             field('Портрет — путь к файлу рядом с листом или URL', txt(c, 'portrait')),
             field('Описание / внешность', txt(c, 'bio', { multi: true, rows: 6 })),
-            h('div', null, btn('Обновить вид', render, 'small'))))
+            field('Игрок — твоё имя (для визитки)', txt(c, 'player')),
+            h('div', { class: 'row' }, btn('Обновить вид', render, 'small'),
+              btn('🪪 Сохранить визитку', exportCard, 'small', false,
+                'Файл для других игроков: имя, титул, описание, портрет и игрок. У них ты появишься в NPC как «персонаж игрока».'))))
         )),
         statsPanel()),
-      h('div', { class: 'stack' }, manaPanel(), healthPanel(), goldPanel())));
+      h('div', { class: 'stack' }, manaPanel(), healthPanel(), armorPanel(), goldPanel())));
 }
 
 function manaPanel() {
@@ -1894,6 +2438,69 @@ function manaPanel() {
       h('span', { class: 'muted' }, '= ' + max),
       h('span', { class: 'grow' }),
       btn('Восстановить полностью', () => { m.current = maxMana(); commit(); }, 'small')));
+}
+
+// Строки брони: магическая — от Защиты от магии и магических предметов; физическая — от предметов. Каждая строка — свои ячейки.
+function armorRows(type) {
+  const rows = [];
+  if (type === 'magic') rows.push({ key: 'magic', name: `Защита от магии ${getTotal('magicDefense')}`,
+    cells: Math.floor(Math.max(0, getTotal('magicDefense')) / MAGIC_ARMOR_STEP), defense: null });
+  for (const it of state.inventory)
+    if (it.equipped && it.armor?.type === type) rows.push({ key: 'item:' + it.id, name: it.name, cells: Math.max(0, Number(it.armor.absorb) || 0), defense: Number(it.armor.defense) || 0 });
+  for (const t of state.character.tempArmor || [])
+    if (t.type === type) rows.push({ key: 'temp:' + t.id, name: '⏳ ' + t.name, cells: t.cells, defense: t.defense, temp: t });
+  return rows;
+}
+const armorSpent = r => Math.min(r.cells, Math.max(0, Number(state.character.armorSpent?.[r.key]) || 0));
+function setArmorSpent(key, n) {
+  const m = (state.character.armorSpent ||= {});
+  if (n > 0) m[key] = n; else delete m[key];
+  commit();
+}
+function armorRow(r) {
+  const spent = armorSpent(r);
+  return h('div', { class: 'armor-row' },
+    h('span', { class: 'armor-name' }, r.name),
+    r.defense != null ? chip('Защита ' + r.defense, 'affix', 'Порог повреждений, который может заблокировать броня') : null,
+    h('span', { class: 'armor-cells' }, r.cells
+      ? Array.from({ length: r.cells }, (_, i) => h('input', { type: 'checkbox', class: 'armor-cell', checked: i < spent,
+          title: i < spent ? 'Ячейка потрачена — снять отметку' : 'Отметить ячейку потраченной',
+          onchange: () => setArmorSpent(r.key, i < spent ? i : i + 1) }))
+      : h('span', { class: 'small muted' }, r.key === 'magic' ? `первая ячейка — на ${MAGIC_ARMOR_STEP} Защиты от магии` : 'нет ячеек')),
+    r.cells ? h('span', { class: 'small muted' }, `свободно ${r.cells - spent} из ${r.cells}`) : null,
+    spent ? btn('↺', () => setArmorSpent(r.key, 0), 'ghost small sq', false, 'Восстановить эту броню') : null,
+    r.temp ? btn('✕', () => {
+      state.character.tempArmor = state.character.tempArmor.filter(t => t !== r.temp);
+      delete state.character.armorSpent?.[r.key];
+      commit();
+    }, 'ghost danger small sq', false, 'Убрать временную броню (покров рассыпался или закончился)') : null);
+}
+function armorPanel() {
+  const mag = armorRows('magic'), phys = armorRows('phys');
+  const free = rows => rows.reduce((t, r) => t + r.cells - armorSpent(r), 0), total = rows => rows.reduce((t, r) => t + r.cells, 0);
+  const restoreAll = rows => { for (const r of rows) delete state.character.armorSpent?.[r.key]; commit(); };
+  const restoreOne = rows => { const r = [...rows].reverse().find(x => armorSpent(x) > 0); if (r) setArmorSpent(r.key, armorSpent(r) - 1); };
+  return h('section', { class: 'panel' },
+    h('div', { class: 'row' },
+      h('div', { class: 'panel-title', style: 'margin:0' }, '🛡 Броня'),
+      h('span', { class: 'grow' }),
+      btn('Как работает', () => goTab('martial'), 'ghost small')),
+    h('div', { class: 'small muted', style: 'margin:4px 0 6px' },
+      'Ячейка поглощает одно тяжёлое повреждение; меньшие складываются (3 средних = тяжёлое). Отмечай потраченную ячейку, округляя вверх.'),
+    h('div', { class: 'armor-block' },
+      h('div', { class: 'row' }, h('b', null, '✨ Магическая'),
+        h('span', { class: 'small muted' }, `свободно ${free(mag)} из ${total(mag)}`),
+        h('span', { class: 'grow' }),
+        btn('+1', () => restoreOne(mag), 'small', !total(mag) || free(mag) === total(mag), 'Восстановить 1 ячейку (хорошее зелье маны)'),
+        btn('Восстановить всю', () => restoreAll(mag), 'small', free(mag) === total(mag), 'Сон, медитация, зелье духа')),
+      mag.map(armorRow)),
+    h('div', { class: 'armor-block' },
+      h('div', { class: 'row' }, h('b', null, '⛰ Физическая'),
+        phys.length ? h('span', { class: 'small muted' }, `свободно ${free(phys)} из ${total(phys)}`) : null,
+        h('span', { class: 'grow' }),
+        phys.length ? btn('Восстановить всю', () => restoreAll(phys), 'small', free(phys) === total(phys)) : null),
+      phys.length ? phys.map(armorRow)
+        : h('div', { class: 'small muted' }, 'Нет используемых предметов с физической бронёй. Задай Защиту и Поглощение у предмета в инвентаре.')));
 }
 
 function goldPanel() {
@@ -1920,37 +2527,44 @@ function statsPanel() {
     fold('points-edit', 'Изменить количество свободных очков вручную',
       h('div', { class: 'row small' }, 'Всего свободных очков:',
         num(c, 'freeStatPoints', { min: 0, onChange: () => { ui.pending = {}; commit(); } }))),
-    h('div', { class: 'stat-grid' }, STAT_DEFS.filter(d => d.allocatable || d.thresholds).map(d => statCard(d, left))));
+    h('div', { class: 'stat-grid' }, STAT_DEFS.filter(d => (d.allocatable || d.thresholds) && (d.key !== 'reserve' || reserveOpen())).map(d => statCard(d, left))));
 }
 
 function statCard(def, left) {
   const base = getBase(def.key), p = ui.pending[def.key] || 0, total = getTotal(def.key), mods = statModifiers(def.key);
-  const baseObj = { v: base };
   return h('div', { class: 'stat-card' },
     h('div', { class: 'stat-head' },
       h('span', { class: 'stat-name' }, def.name),
       h('span', { class: 'stat-total' }, total, p ? h('span', { class: 'plan' }, ' → ' + (total + p)) : null)),
     h('div', { class: 'small muted' },
-      'База ', base, p ? h('span', { class: 'plan' }, ` · план +${p}`) : null,
+      'База ', base, def.allocatable && !def.noMax ? ` из ${STAT_MAX}` : null, p ? h('span', { class: 'plan' }, ` · план +${p}`) : null,
       mods.map(({ item, ef }) => ` · ${item.name} ${opText(ef)}`)),
     def.allocatable ? h('div', { class: 'row', style: 'margin-top:8px' },
-      btn('−', () => { if (p > 1) ui.pending[def.key] = p - 1; else delete ui.pending[def.key]; render(); }, 'big', p <= 0, 'Убрать запланированное очко'),
-      btn('+', () => { ui.pending[def.key] = p + 1; render(); }, 'big primary', left <= 0, left <= 0 ? 'Нет свободных очков' : 'Вложить очко'),
-      h('span', { class: 'grow' }),
-      fold('base-' + def.key, 'база', h('div', { class: 'row small' }, 'Базовое значение:',
-        num(baseObj, 'v', { min: 0, onChange: () => { setBase(def.key, baseObj.v); commit(); } }))))
+      // «−N» — когда запланировано хотя бы N; «+N» — когда свободных очков хотя бы N (и не упираемся в максимум)
+      [100, 10, 1].map(n => btn('−' + (n === 1 ? '' : n), () => { if (p > n) ui.pending[def.key] = p - n; else delete ui.pending[def.key]; render(); },
+        'big', p < n, n === 1 ? 'Убрать запланированное очко' : `Убрать ${n} запланированных очков`)),
+      [1, 10, 100].map(n => n === 1 || (left >= n && base + p + n <= capOf(def.key))
+        ? btn('+' + (n === 1 ? '' : n), () => { ui.pending[def.key] = p + n; render(); }, 'big primary',
+            left < n || base + p + n > capOf(def.key),
+            base + p >= capOf(def.key) ? `Максимум — ${STAT_MAX}` : left < n ? 'Нет свободных очков' : n === 1 ? 'Вложить очко' : `Вложить ${n} очков`) : null))
       : null,
+    def.key === 'reserve' ? h('div', { class: 'small muted', style: 'margin-top:6px' },
+      'Открыт: одна из характеристик дошла до ', STAT_MAX, '. Пополняется свободными очками без максимума. ',
+      'Когда заклинание тратит характеристику, сначала тратится Запас.') : null,
     def.thresholds ? thresholdBlock(def, total) : null);
 }
 
 function thresholdBlock(def, total) {
   const reached = Math.floor(Math.max(0, total) / THRESHOLD_STEP);
+  // характеристика на максимуме — дальше не вырастет, следующих порогов не показываем
+  const maxed = getBase(def.key) >= STAT_MAX;
   const next = (reached + 1) * THRESHOLD_STEP;
   const defined = state.character.statThresholds.filter(t => t.stat === def.key).map(t => t.threshold);
-  const maxT = Math.max(next, ...defined);
+  const maxT = maxed ? reached * THRESHOLD_STEP : Math.max(next, ...defined);
   const rows = [];
   for (let t = THRESHOLD_STEP; t <= maxT; t += THRESHOLD_STEP)
     if (t <= next || defined.includes(t)) rows.push(thrRow(def.key, t, total));
+  if (maxed) return fold('thr-' + def.key, `Пороговые свойства: открыто ${reached} · максимум достигнут`, h('div', { class: 'thr-list' }, rows));
   return fold('thr-' + def.key,
     `Пороговые свойства: открыто ${reached} · следующий ${next} (осталось ${next - total})`,
     h('div', { class: 'thr-list' }, rows,
@@ -2056,6 +2670,21 @@ function effectLabel(ef) {
   return ef.type;
 }
 
+// Броня предмета: вид, Защита (порог повреждений) и Поглощение (ячейки). Действует, пока предмет используется.
+const ARMOR_TYPES = { phys: 'Физическая', magic: 'Магическая' };
+// Магическая броня от характеристики: 1 ячейка на каждые 100 Защиты от магии
+const MAGIC_ARMOR_STEP = 100;
+const armorText = a => `🛡 ${ARMOR_TYPES[a.type]} броня: Защита ${Number(a.defense) || 0} · Поглощение ${Number(a.absorb) || 0}`;
+function armorEditor(it) {
+  const a = it.armor ||= { type: '', defense: 0, absorb: 0 };
+  return h('div', { class: 'sub' },
+    h('div', { class: 'sub-title' }, 'Броня (действует, пока предмет используется)'),
+    h('div', { class: 'grid3' },
+      field('Вид брони', sel(a.type || '', [['', '— нет —'], ...Object.entries(ARMOR_TYPES)], val => { a.type = val; commit(); })),
+      a.type ? field('Защита — порог повреждений', num(a, 'defense', { min: 0 })) : null,
+      a.type ? field('Поглощение — сколько ячеек', num(a, 'absorb', { min: 0 })) : null));
+}
+
 function renderInventoryTab(v) {
   const L = searchableList({
     key: 'inv', placeholder: 'Поиск предмета…',
@@ -2079,14 +2708,15 @@ function renderInventoryTab(v) {
 
 function itemCard(it) {
   const ed = ui.editing.has(it.id);
-  return h('div', { class: 'card' + (it.equipped ? ' equipped' : '') },
+  return h('div', { class: 'card' + (it.equipped ? ' equipped' : ''), id: 'item-' + it.id },
     h('div', { class: 'card-head' },
       thumb(it.image),
       h('div', { class: 'card-title' }, it.name || 'Без названия', it.quantity !== 1 ? h('span', { class: 'qty' }, ' ×' + it.quantity) : null),
       btn(it.equipped ? '⚔ Используется' : 'Не используется', () => { it.equipped = !it.equipped; commit(); },
         'toggle' + (it.equipped ? ' on' : ''), false, 'Надеть / снять'),
       editToggle(it.id)),
-    it.effects.length ? h('div', { class: 'chips' }, it.effects.map(e => chip(effectLabel(e), 'mod'))) : null,
+    it.effects.length || it.armor?.type ? h('div', { class: 'chips' }, it.armor?.type ? chip(armorText(it.armor), 'mod') : null,
+      it.effects.map(e => chip(effectLabel(e), 'mod'))) : null,
     ed ? itemEditor(it) : [
       it.description ? h('div', { class: 'desc' }, rich(it.description)) : null,
       it.notes ? h('div', { class: 'notes' }, '📝 ', rich(it.notes)) : null]);
@@ -2098,6 +2728,7 @@ function itemEditor(it) {
       field('Картинка — путь или URL', txt(it, 'image', { placeholder: 'items/ring.png' }))),
     field('Описание', txt(it, 'description', { multi: true })),
     field('Заметки', txt(it, 'notes', { multi: true, rows: 2 })),
+    armorEditor(it),
     effectsEditor(it),
     dangerRow('Удалить предмет', () => removeWithConfirm(state.inventory, it, `Удалить предмет «${it.name}»?`)));
 }
@@ -2143,44 +2774,101 @@ function effectsEditor(it, title = 'Эффекты предмета (дейст�
 /* =====================================================================
    ARCANE MAGIC
    ===================================================================== */
+const schoolName = id => ARCANE_SCHOOLS.find(x => x[0] === id)?.[1] || '';
+// Заклинание школы доступно, когда отмечено «изучено»; свои — всегда
+const openSchools = () => state.character.arcaneSchools || [];
+const schoolOpen = id => openSchools().includes(id);
+const isArcaneKnown = sp => !sp.sys || (!!sp.learned && schoolOpen(sp.school));
+
 function renderArcaneTab(v) {
+  const f = ui.filters;
+  const order = sp => { const i = ARCANE_SCHOOLS.findIndex(x => x[0] === sp.school); return i < 0 ? 99 : i; };
   const L = searchableList({
-    key: 'arcane', placeholder: 'Поиск заклинания…', items: () => state.arcaneSpells,
-    filter: (s, q) => has(q, s.name, s.description, s.notes), renderItem: arcaneCard, empty: 'Тайных заклинаний пока нет.',
+    key: 'arcane', placeholder: 'Поиск заклинания…',
+    items: () => state.arcaneSpells
+      .filter(sp => (!f.arcaneSchool ? !sp.sys || schoolOpen(sp.school) : f.arcaneSchool === 'all' || (sp.school || 'none') === f.arcaneSchool)
+        && (!f.arcaneMine || isArcaneKnown(sp)))
+      .sort((a, b) => isArcaneKnown(b) - isArcaneKnown(a) || order(a) - order(b) || byName(a, b)),
+    filter: (sp, q) => has(q, sp.name, sp.description, sp.notes, sp.extra, (sp.tags || []).join(' '), schoolName(sp.school)),
+    renderItem: arcaneCard, empty: 'Заклинаний нет.',
   });
   v.append(
-    h('p', { class: 'hint' }, 'Тайная школа — список готовых заклинаний. Кнопка «Применить» списывает стоимость с текущей маны.'),
-    toolbar(btn('+ Добавить заклинание', () => {
-      const s = { id: uid('arc'), name: nameFromSearch('arcane', 'Новое заклинание'), description: '', manaCost: 0, level: '', notes: '', uses: 0 };
-      state.arcaneSpells.push(s);
-      ui.editing.add(s.id);
+    h('p', { class: 'hint' }, 'Тайные школы: ', ARCANE_SCHOOLS.map(x => x[1]).join(', '), '. Заклинания школ — общий список мастера: ',
+      'отметь «изучено», и заклинание можно применять и брать в комбо. Свои заклинания добавляются кнопкой и правятся полностью. ',
+      'Кнопка «Применить» списывает ману, а также истощение и характеристики, если они указаны.'),
+    h('section', { class: 'panel' },
+      h('div', { class: 'row' }, h('b', null, 'Мои тайные школы:'),
+        ARCANE_SCHOOLS.map(([id, name]) => h('label', { class: 'chk' + (schoolOpen(id) ? ' on' : '') },
+          h('input', { type: 'checkbox', checked: schoolOpen(id), onchange: e => {
+            const list = (state.character.arcaneSchools ||= []);
+            if (e.target.checked) { if (!list.includes(id)) list.push(id); } else list.splice(list.indexOf(id), 1);
+            commit();
+          } }), name))),
+      h('div', { class: 'small muted', style: 'margin-top:4px' }, openSchools().length
+        ? 'Заклинания закрытых школ видны в фильтре «все школы», но изучить их нельзя.'
+        : 'Отметь школу, доступную персонажу (в начале игры — одна). Тогда появятся её заклинания.')),
+    toolbar(btn('+ Своё заклинание', () => {
+      const school = ARCANE_SCHOOLS.some(x => x[0] === f.arcaneSchool) ? f.arcaneSchool : '';
+      const sp = { id: uid('arc'), name: nameFromSearch('arcane', 'Новое заклинание'), school, description: '', manaCost: 0, exhaustCost: 0, level: '', notes: '', uses: 0 };
+      state.arcaneSpells.push(sp);
+      ui.editing.add(sp.id);
+      ui.focusName = sp.id;
       commit();
-    }, 'primary'), L.input), L.box);
+    }, 'primary'), L.input,
+      sel(f.arcaneSchool || '', [['', 'мои школы и свои'], ['all', 'все школы'], ...ARCANE_SCHOOLS, ['none', 'без школы']], val => { f.arcaneSchool = val; render(); }),
+      ui.master ? btn('🎓 + Заклинание школы', () => {
+        const school = ARCANE_SCHOOLS.some(x => x[0] === f.arcaneSchool) ? f.arcaneSchool : 'transform';
+        const n = uniqueSeedName(ARCANE_SEED, 'Новое заклинание');
+        ARCANE_SEED.push({ school, n, lvl: '', cost: 0, tags: [], d: '' });
+        if (!schoolOpen(school)) f.arcaneSchool = 'all';
+        resyncRules();
+        const sp = state.arcaneSpells.find(x => x.name === n);
+        if (sp) { ui.editing.add(sp.id); render(); }
+      }, 'master-btn') : null,
+      h('label', { class: 'chk small' }, h('input', { type: 'checkbox', checked: !!f.arcaneMine,
+        onchange: e => { f.arcaneMine = e.target.checked; L.draw(); } }), 'только изученные и свои')),
+    L.box);
 }
 
-function arcaneCard(s) {
-  const ed = ui.editing.has(s.id);
-  return h('div', { class: 'card spell' },
+function arcaneCard(sp) {
+  const ed = ui.editing.has(sp.id), known = isArcaneKnown(sp), ex = spellExhaust(sp);
+  const view = [sp.description ? h('div', { class: 'desc' }, rich(sp.description)) : null,
+    sp.extra ? h('div', { class: 'desc small' }, h('b', null, 'Примечание: '), rich(sp.extra)) : null];
+  return h('div', { class: 'card spell' + (known ? '' : ' locked'), id: 'arc-' + sp.id },
     h('div', { class: 'card-head' },
-      thumb(s.image),
-      h('div', { class: 'card-title' }, s.name || 'Без названия'),
-      s.level ? chip('Ур. ' + s.level) : null,
-      h('span', { class: 'cost' }, '💧 ' + (s.manaCost || 0)),
-      editToggle(s.id)),
-    ed ? h('div', { class: 'form' },
+      thumb(sp.image),
+      h('div', { class: 'card-title' }, (known ? '' : '🔒 ') + (sp.name || 'Без названия')),
+      sp.school ? chip(schoolName(sp.school), 'affix', 'Тайная школа') : null,
+      sp.level ? chip('Ур. ' + sp.level) : null,
+      h('span', { class: 'cost' }, '💧 ' + (sp.manaCost || 0)),
+      exChip(ex), statChips(statCostOf(sp)),
+      sp.sys ? h('label', { class: 'chk small', title: schoolOpen(sp.school) ? 'Заклинание школы изучено персонажем' : 'Школа не открыта — отметь её в «Мои тайные школы»' },
+          h('input', { type: 'checkbox', checked: !!sp.learned, disabled: !schoolOpen(sp.school), onchange: e => { sp.learned = e.target.checked; commit(); } }), 'изучено')
+        : chip('своё', 'mod', 'Своё заклинание — не из списка школы'),
+      editToggle(sp.id)),
+    sp.tags?.length ? h('div', { class: 'chips' }, sp.tags.map(t => chip(t))) : null,
+    ed && !sp.sys ? h('div', { class: 'form' },
       h('div', { class: 'grid3' },
-        field('Название', txt(s, 'name')),
-        field('Стоимость маны', num(s, 'manaCost', { min: 0 })),
-        field('Уровень / сложность', txt(s, 'level', { placeholder: 'необязательно' })),
-        field('Картинка — путь или URL', txt(s, 'image'))),
-      field('Описание', txt(s, 'description', { multi: true, rows: 4 })),
-      field('Заметки', txt(s, 'notes', { multi: true, rows: 2 })),
-      dangerRow('Удалить заклинание', () => removeWithConfirm(state.arcaneSpells, s, `Удалить заклинание «${s.name}»?` + combosUsing('arcane', s.id))))
-      : [s.description ? h('div', { class: 'desc' }, rich(s.description)) : null,
-         s.notes ? h('div', { class: 'notes' }, '📝 ', rich(s.notes)) : null],
+        field('Название', txt(sp, 'name', { nameFor: sp.id })),
+        field('Школа', sel(sp.school || '', [['', '— без школы —'], ...ARCANE_SCHOOLS], val => { sp.school = val; commit(); })),
+        field('Уровень / сложность', txt(sp, 'level', { placeholder: 'необязательно' })),
+        field('Стоимость маны', num(sp, 'manaCost', { min: 0 })),
+        field('Картинка — путь или URL', txt(sp, 'image'))),
+      extraCostRow(sp),
+      field('Описание', txt(sp, 'description', { multi: true, rows: 4 })),
+      field('Заметки', txt(sp, 'notes', { multi: true, rows: 2 })),
+      dangerRow('Удалить заклинание', () => removeWithConfirm(state.arcaneSpells, sp, `Удалить заклинание «${sp.name}»?` + combosUsing('arcane', sp.id))))
+      : ed && sp.sys && ui.master ? null : view,
+    ed && sp.sys && ui.master ? masterArcaneEditor(sp) : null,
+    ed && sp.sys && !ui.master ? h('div', { class: 'form' },
+      h('p', { class: 'hint', style: 'margin:0' }, 'Заклинание из списка школы: описание задаёт мастер. Здесь — твои заметки и картинка.'),
+      field('Заметки', txt(sp, 'notes', { multi: true, rows: 2 })),
+      field('Картинка — путь или URL', txt(sp, 'image')))
+      : !ed && sp.notes ? h('div', { class: 'notes' }, '📝 ', rich(sp.notes)) : null,
     h('div', { class: 'row actions' },
-      btn(`✦ Применить (−${s.manaCost || 0})`, () => castSpell(s), 'primary cast'),
-      s.uses ? h('span', { class: 'uses' }, `использовано ${s.uses} раз`) : null));
+      btn(castLabel(sp.manaCost || 0, ex, undefined, statCostOf(sp)), () => castSpell(sp), 'primary cast', !known,
+        known ? null : schoolOpen(sp.school) ? 'Сначала отметь «изучено»' : 'Школа не открыта'),
+      sp.uses ? h('span', { class: 'uses' }, `использовано ${sp.uses} раз`) : null));
 }
 
 /* =====================================================================
@@ -2196,12 +2884,13 @@ function renderElementalTab(v) {
       'ступень открывается сама при нужном уровне стихии или вручную галочкой «открыта». ',
       'Формы (Стрела, Барьер…) — отдельный справочник. Все аффиксы живут в одном справочнике, а их принадлежность задаётся связями.'),
     toolbar(collapseBtn([...em.elements.map(e => e.id), ...em.elements.flatMap(e => e.stages.map(s => s.id)), ...em.forms.map(f => f.id), ...em.affixes.map(a => a.id)],
-      ['el-elements', 'el-free', 'el-forms', 'el-affixes', 'stages-', 'formlv-']), helpBtn('transform', 'Как работают превращения и стоимость')),
+      ['el-elements', 'el-free', 'el-forms', 'el-affixes', 'el-props', 'props-', 'stages-', 'formlv-']), helpBtn('transform', 'Как работают превращения и стоимость')),
     fold('el-elements', 'Стихии', h('div', { class: 'el-grid' }, em.elements.map(elementCard)), true, 'section'),
     h('div', { id: 'free-affixes' }),
     fold('el-free', `Мои свободные аффиксы (${availableFreeAffixes().length})`, freeAffixesSection(), true, 'section'),
     fold('el-forms', `Формы (${em.forms.length})`, formsSection(), true, 'section'),
-    fold('el-affixes', `Аффиксы — единый справочник (${em.affixes.length})`, affixesSection(), false, 'section'));
+    fold('el-affixes', `Аффиксы — единый справочник (${em.affixes.length})`, affixesSection(), false, 'section'),
+    fold('el-props', `Свойства заклинаний (${PROPS().length})`, propsSection(), false, 'section'));
 }
 
 // Отметка «этот аффикс мне доступен как свободный» = связь типа free у аффикса
@@ -2296,6 +2985,7 @@ function stageRow(el, st) {
         h('input', { type: 'checkbox', checked: st.unlocked, onchange: e => { st.unlocked = e.target.checked; commit(); } }), 'открыта')),
     stageOpeners(st.id).length ? h('div', { class: 'small plan' }, '✦ открыта: ' + stageOpeners(st.id).join(', ')) : null,
     affs.length ? h('div', { class: 'chips' }, affs.map(a => chip(a.name, ok ? 'affix' : 'locked', affTip(a.id)))) : null,
+    stagePropChips(el, st),
     st.reqs?.length ? h('div', { class: 'small muted', style: 'margin-top:3px' }, 'Требуется: ', h('span', { class: 'req-text' }, reqText(st.reqs))) : null,
     st.requirements ? h('div', { class: 'small muted', style: 'margin-top:3px' }, '📝 ', rich(st.requirements)) : null,
     st.description ? h('div', { class: 'small desc', style: 'margin-top:3px' }, rich(st.description)) : null);
@@ -2338,8 +3028,17 @@ function formsSection() {
     filter: (f, q) => has(q, f.name, f.description, f.source), renderItem: formCard,
     empty: 'Форм пока нет. Добавь первую — например, «Стрела» или «Барьер».',
   });
-  return h('div', null, toolbar(btn('+ Добавить форму', () => {
-    const f = { id: uid('form'), name: nameFromSearch('forms', 'Новая форма'), description: '', known: true, source: '' };
+  return h('div', null,
+    h('p', { class: 'hint' }, 'Формы из общего списка мастера: у них отмечаются только «изучена» и источник. Свои формы можно добавлять и править.'),
+    toolbar(ui.master ? btn('🎓 + Общая форма', () => {
+      const n = uniqueSeedName(FORM_SEED, 'Новая форма');
+      FORM_SEED.push({ n, a: [] });
+      resyncRules();
+      const f = EM().forms.find(x => x.name === n);
+      if (f) { ui.editing.add(f.id); render(); }
+    }, 'master-btn') : null,
+    btn('+ Добавить форму', () => {
+    const f = { id: uid('form'), name: nameFromSearch('forms', 'Новая форма'), description: '', known: true, source: '', prevId: null };
     ui.focusName = f.id;
     ui.search.forms = '';
     EM().forms.push(f);
@@ -2349,32 +3048,44 @@ function formsSection() {
 }
 
 function formCard(f) {
-  const ok = isFormAvailable(f), ed = ui.editing.has(f.id), unl = formUnlockers(f.id);
+  const canEdit = !f.sys || ui.master, ok = isFormAvailable(f), ed = canEdit && ui.editing.has(f.id), unl = formUnlockers(f.id);
   const linked = EM().affixes.flatMap(a => a.links.filter(l => l.type === 'form' && l.targetId === f.id).map(l => ({ a, l })));
+  const prev = f.prevId ? findForm(f.prevId) : null, next = EM().forms.filter(x => x.prevId === f.id);
   return h('div', { class: 'card' + (ok ? '' : ' locked') },
     h('div', { class: 'card-head' },
       h('div', { class: 'card-title' }, (ok ? '' : '🔒 ') + f.name),
-      editToggle(f.id)),
+      f.sys ? null : chip('своя', 'mod', 'Своя форма — не из общего списка'),
+      canEdit ? editToggle(f.id, f.sys ? 'master-btn' : '') : null),
+    prev || next.length ? h('div', { class: 'small muted' },
+      prev ? ['Предыдущая форма: ', h('b', null, prev.name)] : null,
+      prev && next.length ? ' · ' : null,
+      next.length ? 'развивается в: ' + next.map(x => x.name).join(', ') : null) : null,
     h('div', { class: 'row small', style: 'margin-top:4px' },
       h('label', { class: 'chk', title: 'Форма изучена персонажем сама по себе' },
         h('input', { type: 'checkbox', checked: f.known, onchange: e => { f.known = e.target.checked; commit(); } }), 'изучена'),
       unl.map(i => chip(`${i.equipped ? '⚔' : '○'} ${i.name}`, i.equipped ? 'mod' : 'locked', i.equipped ? 'Предмет используется' : 'Предмет не используется')),
       !ok ? h('span', { class: 'lock' }, formLockReason(f)) : null,
-      f.source ? h('span', { class: 'muted' }, 'Источник: ' + f.source) : null),
+      f.sys ? h('input', { class: 'grow src-input', placeholder: 'источник: где и у кого изучена', value: f.source || '',
+          oninput: e => { f.source = e.target.value; saveSoon(); } })
+        : f.source ? h('span', { class: 'muted' }, 'Источник: ' + f.source) : null),
     linked.length ? h('div', { class: 'chips' }, linked.map(({ a, l }) =>
       chip(a.name, linkStatus(l).ok ? 'affix' : 'locked', linkStatus(l).reason || affTip(a.id)))) : null,
-    ed ? formEditor(f) : [
+    formPropsRow(f),
+    ed ? (f.sys ? masterFormEditor(f) : formEditor(f)) : [
       f.description ? h('div', { class: 'desc' }, rich(f.description)) : null]);
 }
 
 function formEditor(f) {
   return h('div', { class: 'form' },
-    h('div', { class: 'grid2' }, field('Название', txt(f, 'name', { nameFor: f.id })), field('Источник получения', txt(f, 'source'))),
+    h('div', { class: 'grid3' }, field('Название', txt(f, 'name', { nameFor: f.id })), field('Источник получения', txt(f, 'source')),
+      field('Предыдущая форма', sel(f.prevId || '', [['', '— нет —'], ...EM().forms.filter(x => x !== f).map(x => [x.id, x.name])],
+        val => { f.prevId = val || null; commit(); }))),
     field('Описание', txt(f, 'description', { multi: true })),
     targetAffixEditor('form', f.id, false),
     dangerRow('Удалить форму', () => removeWithConfirm(EM().forms, f,
       `Удалить форму «${f.name}»? Связи аффиксов с ней будут удалены, а заклинания в книге покажут «удалено».`, () => {
         for (const a of EM().affixes) a.links = a.links.filter(l => !(l.type === 'form' && l.targetId === f.id));
+        for (const x of EM().forms) if (x.prevId === f.id) x.prevId = null;
       })));
 }
 
@@ -2420,11 +3131,12 @@ function affixCard(a) {
       field('Описание', txt(a, 'description', { multi: true, rows: 2 })),
       field('Требования', txt(a, 'requirements', { placeholder: 'текстом, если есть' })),
       field('Заметки', txt(a, 'notes', { multi: true, rows: 2 })),
+      affixPropsEditor(a),
       linksEditor(a),
       dangerRow('Удалить аффикс', () => removeWithConfirm(EM().affixes, a, `Удалить аффикс «${a.name}» из справочника? Заклинания, где он выбран, покажут «удалено», из требований ступеней он уберётся.`, () => {
         for (const el of EM().elements) for (const st of el.stages) st.reqs = st.reqs.filter(q => q.affixId !== a.id);
       })))
-      : [a.description ? h('div', { class: 'desc small' }, rich(a.description)) : null,
+      : [affixPropChips(a), a.description ? h('div', { class: 'desc small' }, rich(a.description)) : null,
          a.requirements ? h('div', { class: 'small muted' }, 'Требования: ', rich(a.requirements)) : null,
          a.notes ? h('div', { class: 'notes' }, '📝 ', rich(a.notes)) : null]);
 }
@@ -2433,12 +3145,13 @@ function linksEditor(a) {
   const targetSelect = l => {
     if (l.type === 'element') return sel(l.targetId, [['', '— стихия —'], ...EM().elements.map(e => [e.id, e.name])], val => { l.targetId = val; commit(); });
     if (l.type === 'stage') return sel(l.targetId, [['', '— ступень —'], ...EM().elements.map(e => ({ group: e.name, items: e.stages.map(s => [s.id, s.name]) }))], val => { l.targetId = val; commit(); });
-    if (l.type === 'form') return sel(l.targetId, [['', '— форма —'], ...EM().forms.slice().sort(byName).map(f => [f.id, f.name])], val => { l.targetId = val; commit(); });
+    if (l.type === 'form') return sel(l.targetId, [['', EM().forms.some(f => !f.sys) ? '— своя форма —' : '— своих форм нет —'], ...EM().forms.filter(f => !f.sys).sort(byName).map(f => [f.id, f.name])], val => { l.targetId = val; commit(); });
     return null;
   };
   return h('div', { class: 'sub' },
     h('div', { class: 'sub-title' }, 'Где доступен аффикс (связи)'),
-    a.links.map(l => l.type === 'stage' ? h('div', { class: 'row small' }, chip(linkLabel(l), 'affix'), h('span', { class: 'muted' }, 'ступень стихии — из правил'))
+    a.links.map(l => l.type === 'stage' || (l.type === 'form' && findForm(l.targetId)?.sys)
+      ? h('div', { class: 'row small' }, chip(linkLabel(l), 'affix'), h('span', { class: 'muted' }, l.type === 'stage' ? 'ступень стихии — из правил' : 'форма из общего списка'))
       : h('div', { class: 'row small' },
       sel(l.type, Object.entries(LINK_TYPES).filter(([k]) => k !== 'stage'), val => { a.links[a.links.indexOf(l)] = newLink(val); commit(); }),
       targetSelect(l),
@@ -2551,6 +3264,8 @@ function renderSpellbookTab(v) {
       issuesView(d),
       transformPanel(d),
       costField(d, render),
+      extraCostRow(d, render),
+      propsView(d, true, render),
       h('div', { class: 'form' },
         h('div', { class: 'grid3' },
           field('Название', txt(d, 'name', { placeholder: 'пусто — по компонентам' })),
@@ -2573,24 +3288,30 @@ const combosUsing = (kind, id) => {
 // Шаг комбо ссылается на заклинание из книги (book) или тайной школы (arcane) по id
 const comboStepSpell = st => (st.kind === 'arcane' ? state.arcaneSpells : state.spellbook).find(x => x.id === st.spellId) || null;
 const comboCost = c => c.steps.reduce((sum, st) => { const sp = comboStepSpell(st); return sum + (sp ? spellCost(sp) : 0); }, 0);
+const comboExhaust = c => c.steps.reduce((sum, st) => { const sp = comboStepSpell(st); return sum + (sp ? spellExhaust(sp) : 0); }, 0);
+const comboStatCost = c => c.steps.reduce((sum, st) => {
+  const sp = comboStepSpell(st);
+  if (sp) for (const [k, v] of Object.entries(statCostOf(sp))) sum[k] = (sum[k] || 0) + v;
+  return sum;
+}, {});
 const comboBroken = c => c.steps.filter(st => !comboStepSpell(st)).length;
 
 function castCombo(c) {
   if (!c.steps.length) { toast('В комбо нет заклинаний', 'error'); return; }
-  const cost = comboCost(c), m = state.character.mana;
-  if (m.current < cost) { toast('Недостаточно маны', 'error'); return; }
-  m.current -= cost;
+  const cost = comboCost(c), ex = comboExhaust(c), st = comboStatCost(c), name = c.name || 'Комбо';
+  for (const step of c.steps) { const sp = comboStepSpell(step); if (sp?.stageId) warnNegative(sp); }
+  if (!payCost(name, cost, ex, st)) return;
   c.uses = (c.uses || 0) + 1;
-  for (const st of c.steps) { const sp = comboStepSpell(st); if (sp) sp.uses = (sp.uses || 0) + 1; }
+  for (const step of c.steps) { const sp = comboStepSpell(step); if (sp) { sp.uses = (sp.uses || 0) + 1; if (sp.stageId) addTempArmor(sp); } }
   commit();
-  toast(`${c.name || 'Комбо'}: −${cost} маны`, 'ok');
+  paidToast(name, cost, ex, st);
 }
 
 // Список для выбора шага: книга и тайная школа
 function comboSpellItems(first) {
   return [['', first],
     { group: '📖 Книга заклинаний', items: state.spellbook.slice().sort(byName).map(sp => ['book:' + sp.id, `${sp.name || autoSpellName(sp)} · 💧${spellCost(sp)}`]) },
-    { group: '✦ Тайная магия', items: state.arcaneSpells.slice().sort(byName).map(sp => ['arcane:' + sp.id, `${sp.name} · 💧${spellCost(sp)}`]) }];
+    { group: '✦ Тайная магия', items: state.arcaneSpells.filter(isArcaneKnown).sort(byName).map(sp => ['arcane:' + sp.id, `${sp.name} · 💧${spellCost(sp)}`]) }];
 }
 const parseStepValue = v => { const i = v.indexOf(':'); return { id: uid('step'), kind: v.slice(0, i), spellId: v.slice(i + 1) }; };
 
@@ -2655,19 +3376,23 @@ function comboCard(c) {
       : [c.description ? h('div', { class: 'desc' }, rich(c.description)) : null,
          c.notes ? h('div', { class: 'notes' }, '📝 ', rich(c.notes)) : null],
     h('div', { class: 'row actions' },
-      btn(`🔗 Применить комбо (−${cost})`, () => castCombo(c), 'primary cast', !c.steps.length),
+      btn(castLabel(cost, comboExhaust(c), '🔗 Применить комбо', comboStatCost(c)), () => castCombo(c), 'primary cast', !c.steps.length),
       c.uses ? h('span', { class: 'uses' }, `использовано ${c.uses} раз`) : null));
 }
 
 function spellCard(s) {
   const ed = ui.editing.has(s.id);
-  return h('div', { class: 'card spell' },
+  return h('div', { class: 'card spell', id: 'spell-' + s.id },
     h('div', { class: 'card-head' },
       thumb(s.image),
       h('div', { class: 'card-title' }, s.name || autoSpellName(s)),
       h('span', { class: 'cost', title: s.costManual ? 'своя стоимость' : costText(costCalc(s)) }, '💧 ' + spellCost(s)),
-      editToggle(s.id)),
+      exChip(spellExhaust(s)), statChips(statCostOf(s)),
+      // закрытие редактирования — с проверкой отрицательных процентов
+      btn(ed ? '✓ Готово' : '✎', () => { if (ed) { ui.editing.delete(s.id); warnNegative(s); } else ui.editing.add(s.id); commit(); },
+        'small ' + (ed ? 'primary' : 'ghost'), false, ed ? 'Закончить редактирование' : 'Редактировать')),
     spellFormula(s),
+    propsView(s, ed),
     chainLine(s),
     s.origin ? h('div', { class: 'small muted origin' }, 'получено из: ', spellFormula(s.origin)) : null,
     issuesView(s),
@@ -2678,13 +3403,14 @@ function spellCard(s) {
         field('Картинка — путь или URL', txt(s, 'image'))),
       comboSelects(s, commit, false),
       costField(s, commit),
+      extraCostRow(s),
       field('Описание', txt(s, 'description', { multi: true, rows: 3 })),
       field('Заметки', txt(s, 'notes', { multi: true, rows: 2 })),
       dangerRow('Удалить из книги', () => removeWithConfirm(state.spellbook, s, `Удалить «${s.name}» из книги заклинаний?` + combosUsing('book', s.id))))
       : [s.description ? h('div', { class: 'desc' }, rich(s.description)) : null,
          s.notes ? h('div', { class: 'notes' }, '📝 ', rich(s.notes)) : null],
     h('div', { class: 'row actions' },
-      btn(`✦ Применить (−${spellCost(s)})`, () => castSpell(s), 'primary cast'),
+      btn(castLabel(spellCost(s), spellExhaust(s), undefined, statCostOf(s)), () => castSpell(s), 'primary cast'),
       s.uses ? h('span', { class: 'uses' }, `использовано ${s.uses} раз`) : null));
 }
 
@@ -2915,6 +3641,7 @@ function untestedCard(x) {
         ed ? ui.editing.delete(v.id) : ui.editing.add(v.id);
         commit();
       }, 'small ' + (ed ? 'primary' : 'ghost'), false, 'Заметка и результат')),
+    propsView(res || u, false),
     res ? h('div', { class: 'transform-line' }, h('span', { class: 'tr-mark' }, '⚗ → '), comboEq(res),
       h('span', { class: 'small muted' }, chainText(res) + (magicLevelOf(res) != null ? ' · уровень ступени ' + magicLevelOf(res) : ''))) : null,
     near.map(m => h('div', { class: 'small muted' }, `До «${m.stage.name}» не хватает: `, h('span', { class: 'warn' }, missingText(m.missing)))),
@@ -2949,7 +3676,24 @@ function woundWeights() {
 const heavyToDeath = () => Math.max(1, getTotal('heavyToDeath'));
 const maxHits = () => woundWeights().heavy * heavyToDeath();
 const damage = () => { const w = woundWeights(); return WOUND_TYPES.reduce((s, t) => s + HP()[t.key].items.length * w[t.key], 0); };
-const hits = () => maxHits() - damage();
+// Истощение копится рядом с ранами: каждое отнимает хиты как средняя рана. Сбрасывается сном.
+const exhaustion = () => Math.max(0, Number(HP().exhaustion) || 0);
+const hits = () => maxHits() - damage() - exhaustion() * woundWeights().medium;
+// Истощение, после которого хитов не останется, — смерть: спрашиваем
+const exhaustionKills = n => n > 0 && hits() > 0 && hits() - n * woundWeights().medium <= 0;
+const confirmDeadlyExhaustion = n => !exhaustionKills(n) ||
+  confirm(`+${n} истощения отнимет ${n * woundWeights().medium} хитов, а осталось ${hits()}. Это убьёт персонажа. Продолжить?`);
+function addExhaustion(n) {
+  if (!confirmDeadlyExhaustion(n)) return;
+  HP().exhaustion = Math.max(0, exhaustion() + n);
+  commit();
+  if (n > 0 && hits() <= 0) toast('☠ Хиты закончились — это смерть', 'error');
+}
+function sleepWell() {
+  HP().exhaustion = 0;
+  commit();
+  toast('Сон: истощение сброшено, раны остались', 'ok');
+}
 
 function addWound(key, text = '') {
   const w = newWound(text);
@@ -3004,6 +3748,15 @@ function healthPanel() {
         h('span', { class: 'grow' }),
         btn('+ рана', () => takeWound(def.key), 'small', false, 'Получить рану')),
       woundList(def))),
+    h('div', { class: 'track' },
+      h('div', { class: 'track-head' },
+        h('span', { class: 'track-name' }, '💤 Истощение'),
+        h('span', { class: 'track-val wound' }, exhaustion()),
+        h('span', { class: 'small muted' }, `каждое −${w.medium} хитов, как средняя рана`),
+        h('span', { class: 'grow' }),
+        btn('−', () => addExhaustion(-1), 'small sq', !exhaustion(), 'Снять одно истощение (если отметила по ошибке)'),
+        btn('+ истощение', () => addExhaustion(1), 'small', false, 'Получить истощение'),
+        btn('😴 Выспаться', sleepWell, 'small', !exhaustion(), 'Сбросить истощение в 0. Раны не лечатся'))),
     h('div', { class: 'small muted', style: 'margin-top:6px' },
       `${WOUND_RULES.lightPerMedium} лёгкие = 1 средняя · ${WOUND_RULES.mediumPerHeavy} средние = 1 тяжёлая · ${heavyToDeath()} тяжёлых = смерть`,
       statModifiers('heavyToDeath').length ? h('span', { class: 'plan' }, ` (${WOUND_RULES.heavyToDeath} ${bonusText('heavyToDeath')})`) : null),
@@ -3028,7 +3781,11 @@ function healthMini() {
     WOUND_TYPES.map(def => h('span', { class: 'mini-track', title: tipFor(def) },
       h('span', { class: 'lbl' }, def.short),
       h('b', { class: 'track-val wound' }, HP()[def.key].items.length),
-      btn('+', () => takeWound(def.key), 'small sq', false, 'Получить рану и вписать пояснение'))));
+      btn('+', () => takeWound(def.key), 'small sq', false, 'Получить рану и вписать пояснение'))),
+    h('span', { class: 'mini-track', title: `Истощение: ${exhaustion()} — каждое как средняя рана.\nСбросить — «Выспаться» на листе персонажа` },
+      h('span', { class: 'lbl' }, '💤'),
+      h('b', { class: 'track-val wound' }, exhaustion()),
+      btn('+', () => addExhaustion(1), 'small sq', false, 'Получить истощение')));
 }
 
 /* =====================================================================
@@ -3427,7 +4184,11 @@ const allNames = o => [o.name, ...toTags(o.aliases)].map(x => (x || '').trim()).
 function mentionTargets() {
   const raw = [];
   const add = (kind, id, name, main) => { name = (name || '').trim(); if (name) raw.push({ kind, id, name, main: main || name }); };
-  for (const n of state.npcs) for (const nm of allNames(n)) add('npc', n.id, nm, n.name);
+  add('self', 'me', state.character.name);
+  for (const n of state.npcs) if (n.id !== state.character.id) for (const nm of allNames(n)) add('npc', n.id, nm, n.name);
+  for (const sp of state.spellbook) add('book', sp.id, sp.name || autoSpellName(sp));
+  for (const sp of state.arcaneSpells) add('arcane', sp.id, sp.name);
+  for (const it of state.inventory) add('item', it.id, it.name);
   for (const l of GEO().locations) for (const nm of allNames(l)) add('loc', l.id, nm, l.name);
   for (const f of uniqueVals('faction')) if (!raw.some(x => sameText(x.name, f))) add('faction', f, f);
   // одно и то же имя у разных объектов → «многозначное»: Старик(Лесничий/Король)
@@ -3505,7 +4266,15 @@ function autoMentions(text, targets) {
   for (const f of found) if (f.start >= pos) { res.push(f); pos = f.end; }
   return res;
 }
-const MENTION_ICON = { npc: '👤', loc: '📍', faction: '⚑' };
+const MENTION_ICON = { npc: '👤', loc: '📍', faction: '⚑', self: '🧝', book: '📖', arcane: '✦', item: '🎒' };
+// Открыть карточку на её вкладке и подсветить
+function goToCard(tab, domId, prep) {
+  prep && prep();
+  state.ui.tab = tab;
+  render();
+  const el = document.getElementById(domId);
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); }
+}
 
 function goToFaction(name) {
   const g = groupByName(name);
@@ -3519,6 +4288,10 @@ function goToFaction(name) {
 function openMention(t) {
   if (t.kind === 'npc') goToNpc(t.id);
   else if (t.kind === 'loc') goToLocation(t.id);
+  else if (t.kind === 'self') goTab('character');
+  else if (t.kind === 'book') goToCard('spellbook', 'spell-' + t.id, () => { ui.search.book = ''; });
+  else if (t.kind === 'arcane') goToCard('arcane', 'arc-' + t.id, () => { ui.search.arcane = ''; ui.filters.arcaneSchool = 'all'; ui.filters.arcaneMine = false; });
+  else if (t.kind === 'item') goToCard('inventory', 'item-' + t.id, () => { ui.search.inv = ''; ui.filters.equippedOnly = false; });
   else goToFaction(t.id);
 }
 function goToChronicle(id) {
@@ -3611,6 +4384,7 @@ function renderChronicleTab(v) {
     if (!draft.text.trim()) { toast('Напиши, что произошло'); return; }
     CHR().push({ id: uid('chr'), when: draft.when.trim(), title: draft.title.trim(), text: draft.text.trim(), createdAt: new Date().toISOString() });
     ui.chrDraft = { when: draft.when, title: '', text: '' };
+    ui.chrNewOpen = false;
     commit();
   };
   const box = h('div', { class: 'list' });
@@ -3634,19 +4408,28 @@ function renderChronicleTab(v) {
     box.replaceChildren(...(out.length ? out : [h('div', { class: 'empty' }, q ? 'Ничего не найдено.' : 'Летопись пока пуста.')]));
   };
   draw();
+  // форма открыта только по кнопке; свёрнутый черновик сохраняется до перезагрузки
+  const formOpen = !!ui.chrNewOpen;
   v.append(
-    h('section', { class: 'panel' },
-      h('div', { class: 'panel-title' }, '📜 Новая запись'),
+    formOpen ? h('section', { class: 'panel' },
+      h('div', { class: 'row' }, h('div', { class: 'panel-title', style: 'margin:0' }, '📜 Новая запись'), h('span', { class: 'grow' }),
+        btn('Свернуть', () => { ui.chrNewOpen = false; render(); }, 'ghost small', false,
+          'Спрятать форму. Написанное останется в черновике до перезагрузки')),
       h('div', { class: 'grid3' },
         field('Когда: год месяц число описание', txt(draft, 'when', { placeholder: '2500 09 25 утро' })),
         field('Заголовок', txt(draft, 'title', { placeholder: 'необязательно' }))),
       h('div', { class: 'form' },
-        h('textarea', { rows: 4, placeholder: 'Вилонцы давят Астру. Астра проигрывает танкам и расселяется по захолустьям… (Ctrl+Enter — записать)',
+        h('textarea', { id: 'chr-new-text', rows: 4, placeholder: 'Вилонцы давят Астру. Астра проигрывает танкам и расселяется по захолустьям… (Ctrl+Enter — записать)',
           value: draft.text, oninput: e => { draft.text = e.target.value; },
           onkeydown: e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) add(); } }),
         h('div', { class: 'row' }, btn('Записать в летопись', add, 'primary'),
-          h('span', { class: 'small muted' }, 'Записи сортируются по дате сами; одинаковые даты — в порядке, который задаёшь стрелками ↑↓. Имена NPC, локаций и фракций станут ссылками. Не подхватилось — оберни в скобки: [[Паку]] или [[Пак|Паку]].'), helpBtn('links', 'Как работают ссылки')))),
+          h('span', { class: 'small muted' }, 'Записи сортируются по дате сами; одинаковые даты — в порядке, который задаёшь стрелками ↑↓. Имена NPC, локаций и фракций станут ссылками. Не подхватилось — оберни в скобки: [[Паку]] или [[Пак|Паку]].'), helpBtn('links', 'Как работают ссылки')))) : null,
     toolbar(
+      formOpen ? null : btn(draft.text.trim() ? '✎ Продолжить запись' : '+ Новая запись', () => {
+        ui.chrNewOpen = true;
+        render();
+        document.getElementById('chr-new-text')?.focus();
+      }, 'primary'),
       h('input', { type: 'search', class: 'search', placeholder: 'Поиск по летописи…', value: ui.search.chronicle || '',
         oninput: e => { ui.search.chronicle = e.target.value; draw(); } }),
       btn(ui.chrNewestFirst ? '↓ сначала новые' : '↑ сначала старые', () => { ui.chrNewestFirst = !ui.chrNewestFirst; render(); }, 'ghost small')),
@@ -3824,7 +4607,7 @@ function goToNpc(id) {
 }
 
 // Виды карточек каталога: персона или группа (фракция, орден, народ…)
-const NPC_KINDS = { person: '👤 Персона', group: '👥 Группа' };
+const NPC_KINDS = { person: '👤 Персона', group: '👥 Группа', pc: '🧙 Персонаж игрока' };
 const isGroup = n => n.kind === 'group';
 const groupByName = name => state.npcs.find(o => isGroup(o) && allNames(o).some(x => sameText(x, name || '')));
 // Участники группы — все карточки, у которых в «фракциях» стоит её название (в т.ч. подгруппы)
@@ -3873,7 +4656,8 @@ function renderNpcTab(v) {
   const kind = ui.filters.npcKind || '';
   const L = searchableList({
     key: 'npc', placeholder: 'Поиск по имени…', wrapCls: 'npc-grid',
-    items: () => state.npcs.filter(n =>
+    // свой персонаж (пришёл в общем файле или в чужой визитке) в каталоге не показывается
+    items: () => state.npcs.filter(n => n.id !== state.character.id &&
       (!ui.filters.npcKind || (n.kind || 'person') === ui.filters.npcKind) &&
       (!ui.filters.npcContracts || n.contracts.some(c => ui.filters.npcContracts === 'any' || c.status === ui.filters.npcContracts)) &&
       NPC_TAG_FIELDS.every(k => !f[k] || toTags(n[k]).includes(f[k]) || (k === 'faction' && isGroup(n) && sameText(n.name, f[k]))))
@@ -3896,10 +4680,11 @@ function renderNpcTab(v) {
     toolbar(
       btn('+ Персона', () => addNpc('person'), 'primary'),
       btn('+ Группа', () => addNpc('group'), 'primary'),
+      cardInput(),
       dup.button,
       collapseBtn(state.npcs.map(n => n.id)),
       L.input,
-      sel(kind, [['', 'все карточки'], ['person', 'только персоны'], ['group', 'только группы']], val => { ui.filters.npcKind = val; L.draw(); }),
+      sel(kind, [['', 'все карточки'], ['person', 'только персоны'], ['group', 'только группы'], ['pc', 'только персонажи игроков']], val => { ui.filters.npcKind = val; L.draw(); }),
       filterSel('faction', 'все фракции'), filterSel('status', 'все статусы'), filterSel('location', 'все места'),
       sel(ui.filters.npcContracts || '', [['', 'договоры: все карточки'], ['any', '📜 только с договорами'],
         ...Object.entries(CONTRACT_STATUSES).map(([k, v]) => [k, '📜 договор: ' + v.toLowerCase()])],
@@ -3927,7 +4712,8 @@ function npcCard(n) {
       h('img', { class: 'npc-img', src: n.image || (group ? GROUP_PLACEHOLDER : PLACEHOLDER), alt: '', loading: 'lazy', onerror: imgFallback }),
       h('div', { class: 'grow' },
         h('div', { class: 'card-head' },
-          h('div', { class: 'npc-name grow' }, group ? h('span', { class: 'kind-mark', title: 'Группа' }, '👥 ') : null, n.name || 'Без имени',
+          h('div', { class: 'npc-name grow' }, group ? h('span', { class: 'kind-mark', title: 'Группа' }, '👥 ') : null,
+            n.kind === 'pc' ? h('span', { class: 'kind-mark', title: 'Персонаж игрока' }, '🧙 ') : null, n.name || 'Без имени',
             toTags(n.aliases).length ? h('div', { class: 'aka' }, 'также: ' + toTags(n.aliases).join(', ')) : null),
           btn(open ? 'Свернуть' : 'Подробнее', () => {
             if (open) { ui.npcExpanded.delete(n.id); ui.editing.delete(n.id); } else ui.npcExpanded.add(n.id);
@@ -3939,8 +4725,10 @@ function npcCard(n) {
           toTags(n.status).map(s => chip(s)),
           toTags(n.faction).map(factionChip),
           toTags(n.location).map(locationChip),
-          activeC ? chip(`📜 договоров: ${activeC}`, 'st-active') : null),
-        n.short ? h('div', { class: 'small', style: 'margin-top:4px' }, rich(n.short)) : null)),
+          activeC ? chip(`📜 договоров: ${activeC}`, 'st-active') : null,
+          n.kind === 'pc' && n.player ? chip('🎲 игрок: ' + n.player) : null),
+        n.short ? h('div', { class: 'small', style: 'margin-top:4px' }, rich(n.short)) : null,
+        open && n.bio ? h('div', { class: 'desc small', style: 'margin-top:4px' }, rich(n.bio)) : null)),
     ed ? npcEditor(n) : open ? h('div', { class: 'sub' },
       group ? [
         h('div', { class: 'sub-title' }, 'Участники'),
@@ -4004,6 +4792,7 @@ function npcEditor(n) {
     h('div', { class: 'grid3' },
       field(group ? 'Название группы' : 'Имя', npcNameInput(n)),
       field('Вид карточки', sel(n.kind || 'person', Object.entries(NPC_KINDS), val => { n.kind = val; commit(); })),
+      n.kind === 'pc' ? field('Игрок', txt(n, 'player')) : null,
       group ? field('Цвет на карте', h('div', { class: 'row' },
         h('input', { type: 'color', value: countryColor(n), onchange: e => { n.color = e.target.value; commit(); } }),
         n.color ? btn('авто', () => { delete n.color; commit(); }, 'ghost small', false, 'Цвет по названию') : null)) : null,
@@ -4855,6 +5644,15 @@ function renderDataTab(v) {
     onchange: e => { const f = e.target.files[0]; if (f) importJSONFile(f); e.target.value = ''; } });
   v.append(
     storagePanel(),
+    (() => {
+      const list = propMismatches();
+      return h('section', { class: 'panel' },
+        h('div', { class: 'panel-title' }, `Свои свойства, не совпадающие с расчётом (${list.length})`),
+        list.length ? h('div', { class: 'list' }, list.map(({ sp, r }) => h('div', { class: 'row small' },
+          h('button', { class: 'chip link', onclick: () => goToCard('spellbook', 'spell-' + sp.id, () => { ui.search.book = ''; }) }, '📖 ' + (sp.name || autoSpellName(sp))),
+          h('span', null, `${r.p.n}: своё ${r.manual}, по расчёту ${r.value}`))))
+          : h('div', { class: 'small muted' }, 'Всё совпадает (или своих значений нет).'));
+    })(),
     h('section', { class: 'panel' },
       h('div', { class: 'panel-title' }, 'Файл сохранения'),
       h('p', { class: 'hint' }, 'Всё сохраняется автоматически в браузере (localStorage) для этого файла. ',
@@ -4890,14 +5688,133 @@ function renderDataTab(v) {
       btn('Сбросить все данные', () => {
         if (!confirm('Точно сбросить ВСЕ данные персонажа?')) return;
         if (!confirm('Это последнее предупреждение. Сбросить?')) return;
-        replaceState(defaultState(), 'Перед сбросом');
+        replaceState(normalize(defaultState()), 'Перед сбросом');
         toast('Данные сброшены');
       }, 'danger')));
 }
 
 /* =====================================================================
+   РЕЖИМ МАСТЕРА — открывается адресом …/index.html#master
+   Правит общие формы и заклинания школ. Правки живут только в этом браузере;
+   чтобы они попали всем, мастер выгружает правила в файл, а их переносят в HTML.
+   ===================================================================== */
+const MASTER_KEY = FILE_PREFIX + '-master';
+const RULES_KEY = FILE_PREFIX + '-master-rules';
+const splitCsv = v => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+function uniqueSeedName(list, base) {
+  let n = base, i = 2;
+  while (list.some(x => normName(x.n) === normName(n))) n = `${base} ${i++}`;
+  return n;
+}
+// Если браузер не даёт сохранять (localStorage), режим держится до перезагрузки
+// Правила мастера из этого браузера заменяют списки из HTML (только в режиме мастера)
+function applyMasterRules() {
+  try {
+    const r = JSON.parse(store.get(RULES_KEY) || 'null');
+    if (!r) return;
+    if (Array.isArray(r.forms)) FORM_SEED.splice(0, FORM_SEED.length, ...r.forms);
+    if (Array.isArray(r.arcane)) ARCANE_SEED.splice(0, ARCANE_SEED.length, ...r.arcane);
+    if (Array.isArray(r.extraAffixes)) EXTRA_AFFIXES.splice(0, EXTRA_AFFIXES.length, ...r.extraAffixes);
+    if (Array.isArray(r.props)) PROP_SEED.splice(0, PROP_SEED.length, ...r.props);
+    for (const [obj, src] of [[STAGE_PROPS, r.stageProps], [AFFIX_PROPS, r.affixProps], [SCHOOL_PROPS, r.schoolProps]])
+      if (isPlain(src)) { for (const k in obj) delete obj[k]; Object.assign(obj, src); }
+  } catch (e) { console.error(e); }
+}
+function rulesData() {
+  return { kind: FILE_PREFIX + '-rules', savedAt: new Date().toISOString(), forms: FORM_SEED, arcane: ARCANE_SEED, extraAffixes: EXTRA_AFFIXES,
+    props: PROP_SEED, stageProps: STAGE_PROPS, affixProps: AFFIX_PROPS, schoolProps: SCHOOL_PROPS,
+    affixDescriptions: Object.fromEntries(EM().affixes.filter(a => a.description?.trim()).map(a => [a.name, a.description])) };
+}
+// После правки правил: пересобрать лист по ним и запомнить правила в браузере
+function resyncRules() {
+  syncFormsFromSeed(state);
+  ensureSeedAffixes(state);
+  syncArcaneFromSeed(state);
+  store.set(RULES_KEY, JSON.stringify(rulesData()));
+  commit();
+}
+function masterBar() {
+  return h('div', { class: 'master-bar' },
+    h('b', null, '🎓 Режим мастера'),
+    h('span', { class: 'small' }, ' — кнопки 🎓 правят общие формы и заклинания школ. Правки хранятся только в этом браузере: чтобы они попали всем, выгрузи правила и пришли файл.'),
+    h('div', { class: 'row', style: 'margin-top:6px' },
+      btn('⬇ Выгрузить правила', () => downloadText(JSON.stringify(rulesData(), null, 2), `${FILE_PREFIX}-rules-${dateStamp()}.json`), 'primary small'),
+      btn('↺ Вернуть правила из HTML', () => {
+        if (!confirm('Забыть правки мастера в этом браузере и вернуть общие списки из HTML?')) return;
+        store.set(RULES_KEY, '');
+        location.reload();
+      }, 'small'),
+      btn('Выйти из режима мастера', () => { store.set(MASTER_KEY, ''); location.href = location.pathname; }, 'ghost small')));
+}
+// Поле правила: меняется по уходу из поля, потом лист пересобирается
+const ruleInput = (value, apply, o = {}) => h(o.multi ? 'textarea' : 'input', {
+  type: o.type, rows: o.multi ? 3 : null, value: value ?? '', placeholder: o.placeholder,
+  onchange: e => { apply(o.type === 'number' ? Math.max(0, Number(e.target.value) || 0) : e.target.value); resyncRules(); } });
+
+function masterFormEditor(f) {
+  const sd = FORM_SEED.find(x => x.n === f.name);
+  if (!sd) return null;
+  return h('div', { class: 'form master-edit' },
+    h('div', { class: 'grid2' },
+      field('Название', ruleInput(sd.n, v => {
+        v = v.trim();
+        if (!v || v === sd.n) return;
+        for (const x of FORM_SEED) if (x.prev === sd.n) x.prev = v;
+        f.name = v; sd.n = v;
+      })),
+      field('Предыдущая форма', sel(sd.prev || '', [['', '— нет —'], ...FORM_SEED.filter(x => x !== sd).map(x => [x.n, x.n])],
+        v => { if (v) sd.prev = v; else delete sd.prev; resyncRules(); }))),
+    field('Описание', ruleInput(sd.d, v => { sd.d = v; }, { multi: true })),
+    field('Аффиксы формы — через запятую', ruleInput((sd.a || []).join(', '), v => { sd.a = splitCsv(v); })),
+    dangerRow('Убрать из общего списка', () => {
+      if (!confirm(`Убрать «${sd.n}» из общего списка? У игроков, которые её отметили, она останется своей формой.`)) return;
+      FORM_SEED.splice(FORM_SEED.indexOf(sd), 1);
+      for (const x of FORM_SEED) if (x.prev === sd.n) delete x.prev;
+      ui.editing.delete(f.id);
+      resyncRules();
+    }));
+}
+
+function masterArcaneEditor(sp) {
+  const sd = ARCANE_SEED.find(x => x.n === sp.name);
+  if (!sd) return null;
+  sd.st ||= {};
+  return h('div', { class: 'form master-edit' },
+    h('div', { class: 'grid3' },
+      field('Название', ruleInput(sd.n, v => { v = v.trim(); if (v) { sp.name = v; sd.n = v; } })),
+      field('Школа', sel(sd.school, ARCANE_SCHOOLS, v => { sd.school = v; resyncRules(); })),
+      field('Уровень', ruleInput(sd.lvl, v => { sd.lvl = v.trim(); })),
+      field('Мана', ruleInput(sd.cost || 0, v => { sd.cost = v; }, { type: 'number' })),
+      field('Истощение', ruleInput(sd.ex || 0, v => { if (v) sd.ex = v; else delete sd.ex; }, { type: 'number' })),
+      field('Метки — через запятую', ruleInput((sd.tags || []).join(', '), v => { sd.tags = splitCsv(v); }))),
+    h('div', { class: 'row small' }, h('span', { class: 'muted' }, 'Тратит навсегда:'),
+      MANA_STATS.map(k => h('label', { class: 'chk' }, STAT_SHORT[k],
+        ruleInput(sd.st[k] || 0, v => { if (v) sd.st[k] = v; else delete sd.st[k]; }, { type: 'number' })))),
+    field('Описание', ruleInput(sd.d, v => { sd.d = v; }, { multi: true })),
+    field('Примечание мастера', ruleInput(sd.x, v => { if (v.trim()) sd.x = v; else delete sd.x; })),
+    dangerRow('Убрать из списка школы', () => {
+      if (!confirm(`Убрать «${sd.n}» из списка школы? У игроков, которые его изучили, оно останется своим заклинанием.`)) return;
+      ARCANE_SEED.splice(ARCANE_SEED.indexOf(sd), 1);
+      ui.editing.delete(sp.id);
+      resyncRules();
+    }));
+}
+
+/* =====================================================================
    START
    ===================================================================== */
+{
+  // ?master=true включает, ?master=false выключает; #master тоже включает
+  const q = new URLSearchParams(location.search).get('master');
+  if (q !== null) store.set(MASTER_KEY, q === 'false' || q === '0' ? '' : '1');
+  if (location.hash === '#master') store.set(MASTER_KEY, '1');
+}
+// #master, дописанный к адресу уже открытого листа, страницу не перезагружает — включаем сами
+window.addEventListener('hashchange', () => {
+  if (location.hash === '#master' && !ui.master) { store.set(MASTER_KEY, '1'); location.reload(); }
+});
+ui.master = store.get(MASTER_KEY) === '1' || /[?&]master=(true|1)\b/.test(location.search) || location.hash === '#master';
+if (ui.master) applyMasterRules();
 state = loadState();
 if (!store.get(STORAGE_KEY)) saveState();
 {
