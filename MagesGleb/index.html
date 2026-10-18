@@ -76,6 +76,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .props-table thead th{position:sticky;top:0;z-index:2;background:var(--panel)}
 .props-table th.row-name{position:sticky;left:0;z-index:1;background:var(--panel);font-weight:normal}
 .props-table thead th.corner{left:0;z-index:3}
+.disc-level.sys{border-left:3px solid var(--line2);padding-left:10px}
 .src-input{max-width:340px;padding:3px 8px;font-size:13px}
 .cost.ex-cost{color:#c9a6e8}
 .cost.stat-cost{color:#e8a6a6}
@@ -577,7 +578,7 @@ details.fold.section{margin:6px 0 14px}
 /* =====================================================================
    STATE — константы, справочники, состояние по умолчанию
    ===================================================================== */
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 const STORAGE_KEY = 'gleb-mages-rpg-state';
 const BACKUP_KEY = 'gleb-mages-rpg-backups';
 const FILE_PREFIX = 'gleb-mages-rpg';
@@ -643,6 +644,9 @@ const QUEST_KINDS = { quest: 'Квест', goal: 'Цель', try: 'Хочу по
 const QUEST_STATUSES = { active: 'В процессе', planned: 'Запланировано', done: 'Выполнено', failed: 'Провалено', paused: 'Отложено' };
 const QUEST_FINISHED = ['done', 'failed'];
 
+// Ярусы ступеней, которые пока не показываются (данные остаются в правилах)
+const HIDDEN_TIERS = ['extra'];
+const isStageShown = st => !HIDDEN_TIERS.includes(st.tier);
 const TIERS = {
   linear: 'Линейное развитие',
   advanced: 'Продвинутые формы',
@@ -777,6 +781,39 @@ const ARCANE_SCHOOLS = [['teleport', 'Телепортация'], ['transform', 
 // sections: [{ h: 'Персонаж', items: ['текст', …] }], todo: ['что сделать после обновления', …]. **жирный** поддерживается.
 const CHANGELOG = [
   {
+    "v": "202610181927",
+    "sections": [
+      {
+        "h": "Дисциплины",
+        "items": [
+          "**Бонусы на выбор.** У дисциплины видны бонусы, чей уровень не выше её уровня. Выбираются галочками — не больше, чем уровень дисциплины: на 2-м уровне можно взять два бонуса 1-го уровня или бонус 1-го и бонус 2-го. Действуют только выбранные.",
+          "**Дисциплины из правил мастера.** «Магическая теория» теперь из правил: название, описание и бонус «Свободный аффикс» задаёт мастер (🔒), у тебя — уровень и выбор. Свои бонусы к ней можно добавлять. Дисциплины мастера, которых у тебя нет, — в списке «+ из списка мастера…»."
+        ]
+      },
+      {
+        "h": "Магия",
+        "items": [
+          "Ступени «Дополнительные направления» пока не показываются."
+        ]
+      },
+      {
+        "h": "Системное",
+        "items": [
+          "**Резервная копия при обновлении:** перед первым открытием новой версии листа сохраняется копия данных — «Данные → Резервные копии»."
+        ]
+      },
+      {
+        "h": "Для мастера",
+        "items": [
+          "**Дисциплины в режиме мастера:** «🎓 + Дисциплина мастера», правка названия, описания и бонусов (уровень, описание, эффекты), «🎓 Сделать дисциплиной мастера» для своей, «Убрать из правил». Всё уходит в «Выгрузить правила»."
+        ]
+      }
+    ],
+    "todo": [
+      "Проверь выбор бонусов в дисциплинах: лист отметил те, что действовали раньше, — не больше уровня дисциплины."
+    ]
+  },
+  {
     "v": "202610142242",
     "sections": [
       {
@@ -839,6 +876,17 @@ const CHANGELOG = [
       "Формы с названиями из списка мастера стали общими: описание и аффиксы теперь его. Отметка «изучена» и источник сохранились."
     ]
   },
+];
+
+// Дисциплины из правил мастера: название, описание и заготовленные бонусы (k — постоянный ключ бонуса,
+// lvl — с какого уровня дисциплины доступен, t — название, d — описание, eff — эффекты, aka — старые написания).
+// У игрока — уровень дисциплины и отметка «выбран» у бонусов; свои бонусы можно добавлять.
+const DISCIPLINE_SEED = [
+  { n: 'Магическая теория', d: 'Даёт 1 свободный аффикс.', bonuses: [
+    { k: 'free-affix', lvl: 1, t: 'Свободный аффикс', aka: ['Свободный афикс'],
+      d: 'Знания позволяют добавлять к стихийным заклинаниям 1 аффикс в виде суффикса.',
+      eff: [{ type: 'stat', stat: 'freeSlots', operation: 'add', value: 1 }] },
+  ] },
 ];
 
 // Свойства заклинаний — справочник мастера. coef — коэффициент свойства (пока у всех 1).
@@ -955,11 +1003,8 @@ function defaultState() {
         exhaustion: 0,
       },
     },
-    disciplines: [{
-      id: uid('disc'), name: 'Магическая теория', level: 1, description: '',
-      levels: [{ id: uid('dlvl'), level: 1, title: 'Свободный аффикс', description: '',
-        effects: [{ id: uid('eff'), type: 'stat', stat: 'freeSlots', operation: 'add', value: 1 }] }],
-    }],
+    // стартовая дисциплина; тексты и эффекты подставляются из DISCIPLINE_SEED
+    disciplines: [{ id: uid('disc'), name: 'Магическая теория', level: 1, levels: [{ id: uid('dlvl'), key: 'free-affix', chosen: true }] }],
     inventory: [],
     arcaneSpells: [],
     elementalMagic: buildDefaultMagic(),
@@ -1102,6 +1147,18 @@ const MIGRATIONS = {
       else if (!a.description?.trim()) a.description = text;
     }
     s.version = 10;
+    return s;
+  },
+  // v14 → v15: записи уровней дисциплин стали бонусами на выбор (отмечено не больше уровня дисциплины).
+  // Действовавшие раньше (уровень записи не выше уровня дисциплины) отмечаются выбранными — в пределах уровня.
+  14: s => {
+    for (const d of s.disciplines || []) {
+      const cur = Number(d.level) || 0;
+      let left = cur;
+      for (const lv of (d.levels || []).slice().sort((a, b) => (Number(a.level) || 0) - (Number(b.level) || 0)))
+        lv.chosen = (Number(lv.level) || 0) <= cur && left > 0 ? (left--, true) : false;
+    }
+    s.version = 15;
     return s;
   },
   // v13 → v14: заклинания школ больше не хранятся в HTML. Неизученные записи прежнего списка убираются,
@@ -1247,6 +1304,47 @@ function deepReplace(o, from, to) {
   if (Array.isArray(o)) { o.forEach((v, i) => { if (v === from) o[i] = to; else if (v && typeof v === 'object') deepReplace(v, from, to); }); return; }
   for (const k in o) { const v = o[k]; if (v === from) o[k] = to; else if (v && typeof v === 'object') deepReplace(v, from, to); }
 }
+// Дисциплины из правил: находятся по названию (без учёта регистра, «ё», лишних пробелов); их тексты и
+// заготовленные бонусы — из страницы. Бонусы узнаются по ключу или прежнему названию; «выбран» сохраняется.
+function syncDisciplinesFromSeed(s) {
+  const matched = new Set();
+  for (const sd of DISCIPLINE_SEED) {
+    const names = [sd.n, ...(sd.aka || [])].map(normName);
+    const d = s.disciplines.find(x => !matched.has(x) && names.includes(normName(x.name)));
+    if (!d) continue;
+    matched.add(d);
+    Object.assign(d, { name: sd.n, description: sd.d || '', sys: true });
+    d.levels ||= [];
+    const taken = new Set();
+    for (const b of sd.bonuses || []) {
+      const bn = [b.t, ...(b.aka || [])].map(normName);
+      let lv = d.levels.find(x => x.key === b.k) || d.levels.find(x => !x.key && !taken.has(x) && bn.includes(normName(x.title)));
+      if (!lv) { lv = { id: uid('dlvl'), chosen: false }; d.levels.push(lv); }
+      taken.add(lv);
+      Object.assign(lv, { key: b.k, sys: true, level: b.lvl ?? 1, title: b.t, description: b.d || '',
+        effects: (b.eff || []).map((e, i) => ({ ...localEff(s, e), id: b.k + '-eff' + i })) });
+    }
+    // бонусы, убранные мастером из правил, становятся своими
+    for (const lv of d.levels) if (lv.sys && !taken.has(lv)) { delete lv.sys; delete lv.key; }
+  }
+  for (const d of s.disciplines) if (!matched.has(d)) delete d.sys;
+}
+// Эффекты в правилах ссылаются на формы, ступени и аффиксы по названиям (номера у каждого игрока свои)
+function portableEff(e) {
+  const { id, targetId, stageId, affixId, ...rest } = e;
+  if (e.type === 'unlockForm') rest.formName = findForm(targetId)?.name || '';
+  if (e.type === 'unlockStage') { const r = findStage(stageId); rest.stageRef = r ? r.el.id + '|' + r.st.name : ''; }
+  if (e.type === 'freeAffix') rest.affixName = affName(affixId) || '';
+  return rest;
+}
+function localEff(s, e) {
+  const em = s.elementalMagic, out = { ...e };
+  if (e.formName != null) out.targetId = em.forms.find(f => normName(f.name) === normName(e.formName))?.id || '';
+  if (e.stageRef != null) { const [elId, stName] = e.stageRef.split('|'); out.stageId = em.elements.find(x => x.id === elId)?.stages.find(st => st.name === stName)?.id || ''; }
+  if (e.affixName != null) out.affixId = em.affixes.find(a => normName(a.name) === normName(e.affixName))?.id || '';
+  return out;
+}
+
 function syncFormsFromSeed(s) {
   const em = s.elementalMagic;
   const byKey = new Map();
@@ -1289,6 +1387,7 @@ function normalize(s) {
   fillMissing(s, d);
   syncStagesFromSeed(s);
   syncFormsFromSeed(s);
+  syncDisciplinesFromSeed(s);
   ensureSeedAffixes(s);
   const em = s.elementalMagic;
   for (const de of d.elementalMagic.elements)
@@ -1336,13 +1435,29 @@ const store = {
   },
 };
 
+// Версия листа — номер последней записи «Что нового»
+const SHEET_VERSION = () => CHANGELOG[0]?.v || '';
+// Перед первым открытием новой версии листа (или нового формата сохранения) — копия сохранения как было
+function backupBeforeUpdate(raw, data) {
+  const was = data.ui?.sheetVersion || '', now = SHEET_VERSION();
+  if (data.version >= APP_VERSION && was === now) return;
+  const list = getBackups();
+  list.unshift({ id: uid('bk'), date: new Date().toISOString(), data: raw,
+    label: was === now ? `Перед обновлением формата сохранения (${data.version} → ${APP_VERSION})`
+      : `Перед обновлением листа${was ? ' с версии ' + was : ''}${now ? ' до ' + now : ''}` });
+  while (list.length > MAX_BACKUPS) list.pop();
+  try { store.set(BACKUP_KEY, JSON.stringify(list)); } catch (e) { console.error(e); }
+}
 function loadState() {
   const raw = store.get(STORAGE_KEY);
   if (!raw) return normalize(defaultState());
   try {
     const data = JSON.parse(raw);
     if (typeof data.version !== 'number') throw new Error('нет поля version');
-    return migrate(data);
+    backupBeforeUpdate(raw, data);
+    const st = migrate(data);
+    st.ui.sheetVersion = SHEET_VERSION();
+    return st;
   } catch (e) {
     console.error(e);
     store.set(STORAGE_KEY + '-broken-' + Date.now(), raw);
@@ -1356,7 +1471,11 @@ let saveTimer = null;
 function serializeState(pretty) {
   const em = state.elementalMagic;
   const sysForms = new Set(em.forms.filter(f => f.sys).map(f => f.id));
-  const slim = { ...state, elementalMagic: { ...em,
+  const slim = { ...state,
+    // дисциплины из правил: уровень и выбор бонусов; свои бонусы — целиком
+    disciplines: state.disciplines.map(d => !d.sys ? d : { id: d.id, name: d.name, level: d.level,
+      levels: d.levels.map(lv => lv.sys ? { id: lv.id, key: lv.key, chosen: !!lv.chosen } : lv) }),
+    elementalMagic: { ...em,
     elements: em.elements.map(el => ({ ...el, stages: el.stages.map(st => ({ id: st.id, name: st.name, unlocked: !!st.unlocked })) })),
     // общие формы: только «изучена» и источник
     forms: em.forms.map(f => f.sys ? { id: f.id, name: f.name, known: !!f.known, source: f.source || '', props: f.props || {} } : f),
@@ -1499,10 +1618,13 @@ function setBase(key, v) {
 }
 // Всё, что сейчас «надето»: используемые предметы и записи дисциплин, чей уровень достигнут.
 // item.name — подпись источника для расшифровки бонусов.
+// Бонус дисциплины действует, если он выбран и его уровень не выше уровня дисциплины
+const bonusActive = (d, lv) => !!lv.chosen && (Number(d.level) || 0) >= (Number(lv.level) || 0);
+const chosenCount = d => (d.levels || []).filter(lv => bonusActive(d, lv)).length;
 function activeEffectSources() {
   const res = state.inventory.filter(it => it.equipped).map(it => ({ name: it.name, effects: it.effects || [] }));
   for (const d of state.disciplines) for (const lv of d.levels || [])
-    if ((Number(d.level) || 0) >= (Number(lv.level) || 0))
+    if (bonusActive(d, lv))
       res.push({ name: `${d.name} ур. ${lv.level}`, effects: lv.effects || [], discipline: true });
   return res;
 }
@@ -1595,8 +1717,8 @@ const hasMinLevel = st => st.minLevel !== null && st.minLevel !== undefined && s
 // Уровень 0 = стихия не изучена: ни она, ни её ступени недоступны
 const isElementAvailable = el => elLevel(el) >= 1 || el.stages.some(st => stageOpeners(st.id).length);
 const elementLockReason = el => isElementAvailable(el) ? '' : `${el.name} не изучена (уровень 0)`;
-const isStageAvailable = (el, st) => stageOpeners(st.id).length > 0
-  || (elLevel(el) >= 1 && (!!st.unlocked || (hasMinLevel(st) && elLevel(el) >= Number(st.minLevel))));
+const isStageAvailable = (el, st) => isStageShown(st) && (stageOpeners(st.id).length > 0
+  || (elLevel(el) >= 1 && (!!st.unlocked || (hasMinLevel(st) && elLevel(el) >= Number(st.minLevel)))));
 function stageLockReason(el, st) {
   if (isStageAvailable(el, st)) return '';
   if (!isElementAvailable(el)) return elementLockReason(el);
@@ -1727,7 +1849,7 @@ function spellParts() {
       options: d => {
         const el = findElement(d.elementId);
         if (!el) return [];
-        return el.stages.map(st => ({ id: st.id, label: withAffixes(st.name, stageAffixIds(st.id)), locked: !stageOkFor(d, el, st), reason: stageLockReason(el, st) }));
+        return el.stages.filter(isStageShown).map(st => ({ id: st.id, label: withAffixes(st.name, stageAffixIds(st.id)), locked: !stageOkFor(d, el, st), reason: stageLockReason(el, st) }));
       },
       name: id => findStage(id)?.st.name },
     { key: 'formId', label: 'Форма',
@@ -2148,7 +2270,7 @@ function propsSection() {
     h('div', { class: 'chips' }, PROPS().map(p => chip(`${p.n} ×${p.coef ?? 1}`, 'affix', 'Коэффициент свойства'))),
     ui.master ? masterPropsEditor() : null,
     em.elements.map(el => fold('props-el-' + el.id, `${ELEMENT_ICON[el.id] || ''} ${el.name}: числа ступеней`,
-      propsTable(el.stages.map(st => ({ name: st.name, cell: p => propNumCell(stagePropSys(el, st, p.id), stagePropUser(el, st, p.id),
+      propsTable(el.stages.filter(isStageShown).map(st => ({ name: st.name, cell: p => propNumCell(stagePropSys(el, st, p.id), stagePropUser(el, st, p.id),
         v => { setDeep(em.stageProps ||= {}, stageKey(el, st), p.id, v); commit(); },
         v => { setDeep(STAGE_PROPS, stageKey(el, st), p.id, v); resyncRules(); }) })), 'stage-' + el.id))),
     fold('props-schools', 'Тайные школы: числа (на будущее, в расчётах пока не участвуют)',
@@ -2783,7 +2905,22 @@ function renderDisciplinesTab(v) {
     key: 'disc', placeholder: 'Поиск дисциплины…', items: () => state.disciplines,
     filter: (d, q) => has(q, d.name, d.description), renderItem: disciplineCard, empty: 'Дисциплин пока нет.',
   });
-  v.append(toolbar(btn('+ Добавить дисциплину', () => {
+  // дисциплины из правил мастера, которых у персонажа ещё нет
+  const missing = DISCIPLINE_SEED.filter(sd => !state.disciplines.some(d => normName(d.name) === normName(sd.n)));
+  v.append(toolbar(ui.master ? btn('🎓 + Дисциплина мастера', () => {
+    const n = uniqueSeedName(DISCIPLINE_SEED, 'Новая дисциплина');
+    DISCIPLINE_SEED.push({ n, d: '', bonuses: [] });
+    const d = { id: uid('disc'), name: n, level: 0, levels: [] };
+    state.disciplines.push(d);
+    ui.editing.add(d.id);
+    resyncRules();
+  }, 'master-btn') : null,
+    missing.length ? sel('', [['', '+ из списка мастера…'], ...missing.map(sd => [sd.n, sd.n])], val => {
+    if (!val) return;
+    state.disciplines.push({ id: uid('disc'), name: val, level: 0, levels: [] });
+    syncDisciplinesFromSeed(state);
+    commit();
+  }) : null, btn('+ Своя дисциплина', () => {
     const d = { id: uid('disc'), name: nameFromSearch('disc', 'Новая дисциплина'), level: 0, description: '', levels: [] };
     ui.focusName = d.id;
     state.disciplines.push(d);
@@ -2795,41 +2932,60 @@ function renderDisciplinesTab(v) {
 function disciplineCard(d) {
   const ed = ui.editing.has(d.id), cur = Number(d.level) || 0;
   const levels = (d.levels ||= []).slice().sort((a, b) => a.level - b.level);
+  // Игроку видны бонусы, чей уровень не выше уровня дисциплины; выбрать можно не больше, чем уровень
+  const open = levels.filter(lv => (Number(lv.level) || 0) <= cur), chosen = chosenCount(d), full = chosen >= cur;
+  const pickBlocked = lv => !lv.chosen && ((Number(lv.level) || 0) > cur || full);
+  const pickTitle = lv => (Number(lv.level) || 0) > cur ? `Доступен с ${lv.level}-го уровня дисциплины` : full && !lv.chosen ? `Уже выбрано ${chosen} из ${cur}` : null;
   const levelView = lv => {
-    const on = cur >= (Number(lv.level) || 0);
+    const on = bonusActive(d, lv);
     return h('div', { class: 'thr ' + (on ? 'reached' : 'future') },
-      h('span', { class: 'thr-badge' }, (on ? '✦ ' : '○ ') + 'ур. ' + lv.level),
+      h('label', { class: 'chk', title: on ? 'Убрать выбор' : full ? `Уже выбрано ${chosen} из ${cur}` : 'Выбрать этот бонус' },
+        h('input', { type: 'checkbox', checked: on, disabled: !on && full, onchange: e => { lv.chosen = e.target.checked; commit(); } }),
+        h('span', { class: 'thr-badge' }, 'ур. ' + lv.level)),
       h('div', { class: 'grow' },
         lv.title ? h('b', null, lv.title) : null,
         lv.description ? h('div', { class: 'small desc', style: 'margin:2px 0 0' }, rich(lv.description)) : null,
-        (lv.effects || []).length ? h('div', { class: 'chips' }, lv.effects.map(e => chip(effectLabel(e), on ? 'mod' : 'locked'))) : null,
-        !on ? h('div', { class: 'small muted' }, 'не действует — уровень дисциплины ниже') : null));
+        (lv.effects || []).length ? h('div', { class: 'chips' }, lv.effects.map(e => chip(effectLabel(e), on ? 'mod' : 'locked'))) : null));
   };
   return h('div', { class: 'card' },
     h('div', { class: 'card-head' },
       h('div', { class: 'card-title' }, d.name || 'Без названия'),
+      d.sys ? chip('из правил', 'affix', 'Дисциплина из правил мастера: название, описание и заготовленные бонусы задаёт мастер') : null,
       h('span', { class: 'muted small' }, 'уровень'), levelCtl(d, 'level'), editToggle(d.id)),
-    ed ? h('div', { class: 'form' },
-      field('Название', txt(d, 'name', { nameFor: d.id })),
-      field('Описание', txt(d, 'description', { multi: true, rows: 3 })),
+    ed && d.sys && ui.master ? masterDisciplineEditor(d) : ed ? h('div', { class: 'form' },
+      ui.master && !d.sys ? h('div', null, btn('🎓 Сделать дисциплиной мастера', () => promoteDiscipline(d), 'master-btn small')) : null,
+      d.sys ? h('p', { class: 'hint', style: 'margin:0' }, 'Дисциплина из правил мастера. Его бонусы (🔒) можно только выбирать; свои бонусы — добавлять и править.')
+        : [field('Название', txt(d, 'name', { nameFor: d.id })), field('Описание', txt(d, 'description', { multi: true, rows: 3 }))],
       h('div', { class: 'sub' },
-        h('div', { class: 'sub-title' }, 'Что дают уровни — записывай, когда получаешь'),
-        levels.map(lv => h('div', { class: 'disc-level' },
+        h('div', { class: 'sub-title' }, 'Бонусы дисциплины: на каждом уровне выбирается один бонус своего или более низкого уровня'),
+        levels.map(lv => lv.sys ? h('div', { class: 'disc-level sys' },
+          h('div', { class: 'row' }, h('b', null, `🔒 ур. ${lv.level} — ${lv.title}`),
+            h('label', { class: 'chk small', title: pickTitle(lv) }, h('input', { type: 'checkbox', checked: !!lv.chosen, disabled: pickBlocked(lv),
+              onchange: e => { lv.chosen = e.target.checked; commit(); } }), 'выбран')),
+          lv.description ? h('div', { class: 'small desc' }, rich(lv.description)) : null,
+          lv.effects.length ? h('div', { class: 'chips' }, lv.effects.map(e => chip(effectLabel(e), 'mod'))) : null)
+        : h('div', { class: 'disc-level' },
           h('div', { class: 'grid3' },
             field('Уровень', num(lv, 'level', { min: 0 })),
             field('Название', txt(lv, 'title', { placeholder: 'быстрый бег…' })),
             h('div', { style: 'align-self:end' }, btn('✕ убрать запись', () => {
-              if (confirm(`Убрать запись уровня ${lv.level}${lv.title ? ' «' + lv.title + '»' : ''}?`)) { d.levels.splice(d.levels.indexOf(lv), 1); commit(); }
+              if (confirm(`Убрать бонус уровня ${lv.level}${lv.title ? ' «' + lv.title + '»' : ''}?`)) { d.levels.splice(d.levels.indexOf(lv), 1); commit(); }
             }, 'ghost danger small'))),
+          h('label', { class: 'chk small', title: pickTitle(lv) }, h('input', { type: 'checkbox', checked: !!lv.chosen, disabled: pickBlocked(lv),
+              onchange: e => { lv.chosen = e.target.checked; commit(); } }), 'выбран'),
           field('Описание', txt(lv, 'description', { multi: true, rows: 2 })),
-          effectsEditor(lv, 'Эффекты (действуют, пока дисциплина этого уровня или выше)'))),
-        h('div', null, btn('+ запись уровня', () => {
+          effectsEditor(lv, 'Эффекты (действуют, если бонус выбран)'))),
+        h('div', null, btn(d.sys ? '+ свой бонус' : '+ бонус', () => {
           d.levels.push({ id: uid('dlvl'), level: Math.max(1, cur), title: '', description: '', effects: [] });
           commit();
         }, 'ghost small'))),
-      dangerRow('Удалить дисциплину', () => removeWithConfirm(state.disciplines, d, `Удалить дисциплину «${d.name}»?`)))
+      dangerRow('Удалить дисциплину', () => removeWithConfirm(state.disciplines, d, `Удалить дисциплину «${d.name}»?` +
+        (d.sys ? ' Её можно будет снова добавить из списка мастера.' : ''))))
       : [d.description ? h('div', { class: 'desc' }, rich(d.description)) : null,
-         levels.length ? h('div', { class: 'thr-list' }, levels.map(levelView)) : null]);
+         open.length ? [
+           h('div', { class: 'small ' + (chosen > cur ? 'warn' : 'muted'), style: 'margin-top:6px' },
+             `Бонусы: выбрано ${chosen} из ${cur}` + (chosen < cur ? ' — можно выбрать ещё' : '')),
+           h('div', { class: 'thr-list' }, open.map(levelView))] : null]);
 }
 
 /* =====================================================================
@@ -2908,7 +3064,7 @@ function itemEditor(it) {
     dangerRow('Удалить предмет', () => removeWithConfirm(state.inventory, it, `Удалить предмет «${it.name}»?`)));
 }
 
-function effectsEditor(it, title = 'Эффекты предмета (действуют, пока предмет используется)') {
+function effectsEditor(it, title = 'Эффекты предмета (действуют, пока предмет используется)', save = commit) {
   const forms = EM().forms.slice().sort(byName);
   const blank = type => ({
     stat: { stat: 'maxMana', operation: 'add', value: 0 }, unlockForm: { targetId: '' },
@@ -2917,32 +3073,32 @@ function effectsEditor(it, title = 'Эффекты предмета (дейст�
   const fields = ef => {
     switch (ef.type) {
       case 'stat': return [
-        sel(ef.stat, STAT_DEFS.map(d => [d.key, d.name]), val => { ef.stat = val; commit(); }),
-        sel(ef.operation, Object.entries(OPS).map(([k, o]) => [k, o.label]), val => { ef.operation = val; commit(); }),
-        num(ef, 'value', { float: true, step: 'any' })];
+        sel(ef.stat, STAT_DEFS.map(d => [d.key, d.name]), val => { ef.stat = val; save(); }),
+        sel(ef.operation, Object.entries(OPS).map(([k, o]) => [k, o.label]), val => { ef.operation = val; save(); }),
+        num(ef, 'value', { float: true, step: 'any', onChange: save })];
       case 'unlockForm': return sel(ef.targetId || '', [['', forms.length ? '— выбери форму —' : '— сначала создай форму —'], ...forms.map(f => [f.id, f.name])],
-        val => { ef.targetId = val; commit(); });
+        val => { ef.targetId = val; save(); });
       case 'elementLevel': return [
-        sel(ef.elementId || '', [['', '— стихия —'], ...EM().elements.map(e => [e.id, (ELEMENT_ICON[e.id] || '') + ' ' + e.name])], val => { ef.elementId = val; commit(); }),
-        h('span', { class: 'muted small' }, '+'), num(ef, 'value', { class: 'lvl-num' }), h('span', { class: 'muted small' }, 'ур.')];
-      case 'unlockStage': return sel(ef.stageId || '', [['', '— ступень —'], ...EM().elements.map(e => ({ group: e.name, items: e.stages.map(st => [st.id, st.name]) }))],
-        val => { ef.stageId = val; commit(); });
+        sel(ef.elementId || '', [['', '— стихия —'], ...EM().elements.map(e => [e.id, (ELEMENT_ICON[e.id] || '') + ' ' + e.name])], val => { ef.elementId = val; save(); }),
+        h('span', { class: 'muted small' }, '+'), num(ef, 'value', { class: 'lvl-num', onChange: save }), h('span', { class: 'muted small' }, 'ур.')];
+      case 'unlockStage': return sel(ef.stageId || '', [['', '— ступень —'], ...EM().elements.map(e => ({ group: e.name, items: e.stages.filter(isStageShown).map(st => [st.id, st.name]) }))],
+        val => { ef.stageId = val; save(); });
       case 'freeAffix': return sel(ef.affixId || '', [['', '— аффикс —'], ...EM().affixes.slice().sort(byName).map(a => [a.id, a.name])],
-        val => { ef.affixId = val; commit(); });
+        val => { ef.affixId = val; save(); });
     }
     return null;
   };
   return h('div', { class: 'sub' },
     h('div', { class: 'sub-title' }, title),
     it.effects.map(ef => h('div', { class: 'row' },
-      sel(ef.type, Object.entries(EFFECT_TYPES), val => { Object.assign(ef, { type: val }, blank(val)); commit(); }),
+      sel(ef.type, Object.entries(EFFECT_TYPES), val => { Object.assign(ef, { type: val }, blank(val)); save(); }),
       fields(ef),
-      btn('✕', () => { it.effects.splice(it.effects.indexOf(ef), 1); commit(); }, 'ghost danger small sq', false, 'Убрать эффект'))),
+      btn('✕', () => { it.effects.splice(it.effects.indexOf(ef), 1); save(); }, 'ghost danger small sq', false, 'Убрать эффект'))),
     h('div', { class: 'row' },
       sel('', [['', '+ добавить эффект…'], ...Object.entries(EFFECT_TYPES)], val => {
         if (!val) return;
         it.effects.push({ id: uid('eff'), type: val, ...blank(val) });
-        commit();
+        save();
       })));
 }
 
@@ -3153,12 +3309,13 @@ function elementCard(el) {
       : h('span', { class: 'lock' }, '🔒 Не изучена — подними уровень до 1, чтобы открыть стихию')),
     el.description ? h('div', { class: 'desc small muted' }, rich(el.description)) : null,
     el.conditions ? h('div', { class: 'desc small' }, h('b', null, 'Повышение: '), rich(el.conditions)) : null,
-    fold('stages-' + el.id, `Ступени и уровни (${el.stages.length})`, stagesList(el)));
+    fold('stages-' + el.id, `Ступени и уровни (${el.stages.filter(isStageShown).length})`, stagesList(el)));
 }
 
 function stagesList(el) {
   const out = [];
   for (const [tier, label] of Object.entries(TIERS)) {
+    if (HIDDEN_TIERS.includes(tier)) continue;
     const list = el.stages.filter(s => (s.tier || 'advanced') === tier);
     if (!list.length) continue;
     out.push(h('div', { class: 'tier-title' }, label), list.map(st => stageRow(el, st)));
@@ -5994,18 +6151,20 @@ function applyMasterRules() {
     if (Array.isArray(r.forms)) FORM_SEED.splice(0, FORM_SEED.length, ...r.forms);
     if (Array.isArray(r.extraAffixes)) EXTRA_AFFIXES.splice(0, EXTRA_AFFIXES.length, ...r.extraAffixes);
     if (Array.isArray(r.props)) PROP_SEED.splice(0, PROP_SEED.length, ...r.props);
+    if (Array.isArray(r.disciplines)) DISCIPLINE_SEED.splice(0, DISCIPLINE_SEED.length, ...r.disciplines);
     for (const [obj, src] of [[STAGE_PROPS, r.stageProps], [AFFIX_PROPS, r.affixProps], [SCHOOL_PROPS, r.schoolProps]])
       if (isPlain(src)) { for (const k in obj) delete obj[k]; Object.assign(obj, src); }
   } catch (e) { console.error(e); }
 }
 function rulesData() {
-  return { kind: FILE_PREFIX + '-rules', savedAt: new Date().toISOString(), forms: FORM_SEED, extraAffixes: EXTRA_AFFIXES,
+  return { kind: FILE_PREFIX + '-rules', savedAt: new Date().toISOString(), forms: FORM_SEED, disciplines: DISCIPLINE_SEED, extraAffixes: EXTRA_AFFIXES,
     props: PROP_SEED, stageProps: STAGE_PROPS, affixProps: AFFIX_PROPS, schoolProps: SCHOOL_PROPS,
     affixDescriptions: Object.fromEntries(EM().affixes.filter(a => a.description?.trim()).map(a => [a.name, a.description])) };
 }
 // После правки правил: пересобрать лист по ним и запомнить правила в браузере
 function resyncRules() {
   syncFormsFromSeed(state);
+  syncDisciplinesFromSeed(state);
   ensureSeedAffixes(state);
   store.set(RULES_KEY, JSON.stringify(rulesData()));
   commit();
@@ -6027,6 +6186,63 @@ function masterBar() {
 const ruleInput = (value, apply, o = {}) => h(o.multi ? 'textarea' : 'input', {
   type: o.type, rows: o.multi ? 3 : null, value: value ?? '', placeholder: o.placeholder,
   onchange: e => { apply(o.type === 'number' ? Math.max(0, Number(e.target.value) || 0) : e.target.value); resyncRules(); } });
+
+const seedOfDiscipline = d => DISCIPLINE_SEED.find(x => [x.n, ...(x.aka || [])].some(n => normName(n) === normName(d.name)));
+function masterDisciplineEditor(d) {
+  const sd = seedOfDiscipline(d);
+  if (!sd) return null;
+  sd.bonuses ||= [];
+  const bonusEffects = b => {
+    const proxy = { effects: (b.eff || []).map(e => localEff(state, e)) };
+    return effectsEditor(proxy, 'Эффекты бонуса (действуют, если бонус выбран)', () => { b.eff = proxy.effects.map(portableEff); resyncRules(); });
+  };
+  return h('div', { class: 'form master-edit' },
+    h('div', { class: 'grid2' },
+      field('Название', ruleInput(sd.n, v => {
+        v = v.trim();
+        if (!v || v === sd.n) return;
+        // старое название — чтобы у игроков дисциплина узналась
+        if (!(sd.aka ||= []).includes(sd.n)) sd.aka.push(sd.n);
+        sd.n = v; d.name = v;
+      }))),
+    field('Описание', ruleInput(sd.d, v => { sd.d = v; }, { multi: true })),
+    h('div', { class: 'sub' },
+      h('div', { class: 'sub-title' }, 'Бонусы мастера: игрок выбирает их галочкой'),
+      sd.bonuses.map((b, i) => h('div', { class: 'disc-level sys' },
+        h('div', { class: 'grid3' },
+          field('Доступен с уровня', ruleInput(b.lvl ?? 1, v => { b.lvl = Math.round(v); }, { type: 'number' })),
+          field('Название', ruleInput(b.t, v => {
+            v = v.trim();
+            if (!v || v === b.t) return;
+            if (!(b.aka ||= []).includes(b.t)) b.aka.push(b.t);
+            b.t = v;
+          })),
+          h('div', { style: 'align-self:end' }, btn('✕ убрать бонус', () => {
+            if (!confirm(`Убрать бонус «${b.t}» из правил? У игроков, кто его выбрал, он останется своим.`)) return;
+            sd.bonuses.splice(i, 1);
+            resyncRules();
+          }, 'ghost danger small'))),
+        field('Описание', ruleInput(b.d, v => { b.d = v; }, { multi: true })),
+        bonusEffects(b))),
+      h('div', null, btn('🎓 + Бонус мастера', () => { sd.bonuses.push({ k: uid('b'), lvl: 1, t: 'Новый бонус', d: '', eff: [] }); resyncRules(); }, 'master-btn small'))),
+    dangerRow('Убрать дисциплину из правил', () => {
+      if (!confirm(`Убрать «${sd.n}» из правил? У игроков она останется своей дисциплиной.`)) return;
+      DISCIPLINE_SEED.splice(DISCIPLINE_SEED.indexOf(sd), 1);
+      resyncRules();
+    }));
+}
+// Своя дисциплина → дисциплина мастера (её записи становятся бонусами мастера, выбор сохраняется)
+function promoteDiscipline(d) {
+  if (!confirm(`Сделать «${d.name}» дисциплиной мастера? Её бонусы станут общими для всех игроков.`)) return;
+  const sd = { n: d.name.trim(), d: d.description || '', bonuses: [] };
+  for (const lv of d.levels || []) {
+    const k = uid('b');
+    sd.bonuses.push({ k, lvl: Number(lv.level) || 1, t: lv.title || 'Бонус', d: lv.description || '', eff: (lv.effects || []).map(portableEff) });
+    lv.key = k;
+  }
+  DISCIPLINE_SEED.push(sd);
+  resyncRules();
+}
 
 function masterFormEditor(f) {
   const sd = FORM_SEED.find(x => x.n === f.name);
@@ -6068,6 +6284,7 @@ window.addEventListener('hashchange', () => {
 ui.master = store.get(MASTER_KEY) === '1' || /[?&]master=(true|1)\b/.test(location.search) || location.hash === '#master';
 if (ui.master) applyMasterRules();
 state = loadState();
+state.ui.sheetVersion = SHEET_VERSION();
 if (!store.get(STORAGE_KEY)) saveState();
 {
   const fromUrl = decodeURIComponent(location.hash.slice(1));
